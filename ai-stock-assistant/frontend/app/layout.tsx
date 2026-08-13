@@ -22,7 +22,7 @@ export default function RootLayout({
     <html lang="zh-CN" className={`${inter.variable} antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{
-          __html: `(function(){try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&window.matchMedia("(prefers-color-scheme:dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})()`
+          __html: `(function(){try{var t=localStorage.getItem("theme");var root=document.documentElement;if(t==="dark"||(t===null&&window.matchMedia("(prefers-color-scheme:dark)").matches)){root.classList.add("dark")}else if(t==="cute"){root.classList.add("theme-cute")}}catch(e){}})()`
         }} />
       </head>
       <body>{children}</body>

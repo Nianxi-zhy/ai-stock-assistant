@@ -1,8 +1,12 @@
 """DecisionAgent — 综合决策"""
 from __future__ import annotations
 
+import logging
+
 from app.agents.base import AgentResult
 from app.agents.llm import call_llm
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """你是一名 A 股投资决策分析师。你将收到多个子 Agent 的分析结果，
 需要综合判断并给出最终的评分和操作建议。
@@ -74,7 +78,8 @@ def run_decision_agent(
         reason = str(data.get("reason", ""))
         weights = str(data.get("agent_weights", {}))
         return score, action, reason, weights
-    except Exception:
+    except Exception as e:
+        logger.warning("Agent %s failed: %s", "DecisionAgent", e)
         fund_stars = fundamental_result.stars if fundamental_result else 3
         avg = (news_result.stars + technical_result.stars + risk_result.stars + fund_stars) / 4
         score = round(avg * 2)

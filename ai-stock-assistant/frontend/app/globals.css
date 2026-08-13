@@ -37,6 +37,253 @@
   --color-accent-light: rgba(59, 130, 246, 0.1);
 }
 
+/* ── 可爱 Q 版主题 ── */
+.theme-cute {
+  --color-bg-main: #FFFBF5;
+  --color-bg-card: #FFFFFF;
+  --color-bg-raised: #FFF8F0;
+  --color-bg-hover: #FFF0F5;
+  --color-border: rgba(255, 183, 197, 0.35);
+  --color-border-light: rgba(255, 183, 197, 0.2);
+  --color-text-primary: #5A4A42;
+  --color-text-secondary: #8B7B73;
+  --color-text-tertiary: #B0A090;
+  --color-accent: #FF6B8A;
+  --color-accent-hover: #FF9AAE;
+  --color-accent-light: rgba(255, 107, 138, 0.12);
+  --color-success: #7ED9B0;
+  --color-warning: #FFC878;
+  --color-danger: #FF6B8A;
+}
+
+.theme-cute body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Quicksand", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: linear-gradient(135deg, #FFFBF5 0%, #FFF5F7 50%, #F0FDF9 100%);
+  background-attachment: fixed;
+}
+
+.theme-cute ::-webkit-scrollbar-thumb {
+  background: #FFB7C5;
+  border-radius: 10px;
+}
+.theme-cute ::-webkit-scrollbar-thumb:hover {
+  background: #FF9AAE;
+}
+
+/* 可爱主题：让按钮、卡片更圆润 */
+.theme-cute button,
+.theme-cute [role="button"],
+.theme-cute input,
+.theme-cute select,
+.theme-cute textarea {
+  border-radius: 9999px;
+}
+
+.theme-cute aside {
+  border-radius: 1.5rem;
+}
+
+/* ── 可爱主题精致化覆盖 ── */
+
+/* 侧边栏 */
+.theme-cute aside {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(255, 183, 197, 0.3) !important;
+  box-shadow: 4px 0 24px rgba(255, 183, 197, 0.12);
+}
+
+.theme-cute aside nav button {
+  border-radius: 18px !important;
+  margin-bottom: 6px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-cute aside nav button:hover {
+  transform: translateX(4px);
+  background: rgba(255, 107, 138, 0.08);
+}
+
+.theme-cute aside nav button[data-active="true"] {
+  background: linear-gradient(135deg, rgba(255, 107, 138, 0.15) 0%, rgba(255, 154, 174, 0.1) 100%) !important;
+  color: #FF6B8A !important;
+  box-shadow: 0 2px 12px rgba(255, 107, 138, 0.15);
+  font-weight: 700;
+}
+
+/* 顶栏 */
+.theme-cute header {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 183, 197, 0.25) !important;
+}
+
+/* KPI 卡片渐变 */
+.theme-cute .kpi-card {
+  background: linear-gradient(135deg, #FFFFFF 0%, #FFF8F0 100%) !important;
+  border: 1px solid rgba(255, 183, 197, 0.25) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 8px 24px rgba(90, 74, 66, 0.06), 0 2px 8px rgba(255, 183, 197, 0.1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-cute .kpi-card::before {
+  content: "";
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  opacity: 0.12;
+}
+
+.theme-cute .kpi-card:nth-child(1)::before { background: #A7D8FF; }
+.theme-cute .kpi-card:nth-child(2)::before { background: #A7E8D4; }
+.theme-cute .kpi-card:nth-child(3)::before { background: #D8C4FF; }
+
+/* 覆盖 KPI 里的专业蓝/绿/紫为可爱色 */
+.theme-cute .text-blue-600 { color: #FF6B8A !important; }
+.theme-cute .text-green-600 { color: #4A9B7F !important; }
+.theme-cute .text-purple-600 { color: #B78BFF !important; }
+.theme-cute .text-emerald-600 { color: #4A9B7F !important; }
+.theme-cute .text-amber-600 { color: #E8A645 !important; }
+.theme-cute .text-red-500 { color: #FF6B8A !important; }
+.theme-cute .text-orange-500 { color: #FFC878 !important; }
+.theme-cute .hover\:text-blue-700:hover { color: #FF9AAE !important; }
+
+.theme-cute .bg-blue-50 { background: rgba(255, 107, 138, 0.12) !important; }
+.theme-cute .bg-green-50 { background: rgba(126, 217, 176, 0.2) !important; }
+.theme-cute .bg-purple-50 { background: rgba(183, 139, 255, 0.15) !important; }
+.theme-cute .bg-amber-50 { background: rgba(255, 200, 120, 0.15) !important; }
+.theme-cute .bg-red-50 { background: rgba(255, 107, 138, 0.12) !important; }
+
+/* 可爱主题圆角保持，但不再给所有 rounded 元素强制白底和阴影，
+   避免覆盖 kpi-card 等已有渐变背景和自定义阴影。 */
+.theme-cute .rounded-2xl,
+.theme-cute .rounded-xl {
+  border-radius: 1.5rem;
+}
+
+/* 表格行卡片化 */
+.theme-cute table tbody tr td {
+  background: rgba(255, 251, 245, 0.8) !important;
+  border-top: 1px solid rgba(255, 183, 197, 0.12) !important;
+  border-bottom: 1px solid rgba(255, 183, 197, 0.12) !important;
+}
+
+.theme-cute table tbody tr td:first-child {
+  border-radius: 18px 0 0 18px !important;
+  border-left: 1px solid rgba(255, 183, 197, 0.12) !important;
+}
+
+.theme-cute table tbody tr td:last-child {
+  border-radius: 0 18px 18px 0 !important;
+  border-right: 1px solid rgba(255, 183, 197, 0.12) !important;
+}
+
+.theme-cute table tbody tr:hover td {
+  background: rgba(255, 183, 197, 0.08) !important;
+}
+
+/* 排名徽章（仅第一列） */
+.theme-cute table tbody tr:first-child td:first-child .rounded-full {
+  background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+  box-shadow: 0 2px 8px rgba(255, 165, 0, 0.35);
+}
+
+.theme-cute table tbody tr:nth-child(2) td:first-child .rounded-full {
+  background: linear-gradient(135deg, #C0C0C0, #A0A0A0) !important;
+}
+
+.theme-cute table tbody tr:nth-child(3) td:first-child .rounded-full {
+  background: linear-gradient(135deg, #CD7F32, #B87333) !important;
+}
+
+/* 按钮 */
+.theme-cute button[class~="bg-[#3B82F6]"],
+.theme-cute button.text-white,
+.theme-cute .btn-primary {
+  background: linear-gradient(135deg, #FF6B8A 0%, #FF9AAE 100%) !important;
+  box-shadow: 0 4px 14px rgba(255, 107, 138, 0.3) !important;
+  border: none !important;
+  transition: transform 0.2s ease;
+}
+
+.theme-cute button[class~="bg-[#3B82F6]"]:hover,
+.theme-cute button.text-white:hover,
+.theme-cute .btn-primary:hover {
+  transform: translateY(-2px);
+}
+
+/* 买入按钮（表格里那个玻璃拟态按钮） */
+.theme-cute button.bg-gradient-to-b.from-white\/50 {
+  background: linear-gradient(135deg, #A7E8D4 0%, #7ED9B0 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(126, 217, 176, 0.35) !important;
+}
+
+/* 撤销按钮 */
+.theme-cute button.border-red-300\/40 {
+  background: rgba(255, 107, 138, 0.12) !important;
+  color: #FF6B8A !important;
+  border: 1px solid rgba(255, 107, 138, 0.25) !important;
+}
+
+/* 标签 */
+.theme-cute span.rounded-full,
+.theme-cute span.rounded-xl {
+  border-radius: 12px !important;
+}
+
+/* 标题装饰 */
+.theme-cute h2,
+.theme-cute h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Logo 区域可爱化 */
+.theme-cute aside > div:first-child img {
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #FFB7C5 0%, #FF9AAE 100%) !important;
+  padding: 4px !important;
+  box-shadow: 0 4px 12px rgba(255, 183, 197, 0.4);
+}
+
+.theme-cute aside > div:first-child > div > div:first-child {
+  font-weight: 800 !important;
+  color: #FF6B8A !important;
+}
+
+/* 评分圆环颜色覆盖 */
+.theme-cute circle[stroke="#22c55e"] { stroke: #7ED9B0 !important; }
+.theme-cute circle[stroke="#2563eb"] { stroke: #FF6B8A !important; }
+.theme-cute circle[stroke="#f97316"] { stroke: #FFC878 !important; }
+.theme-cute circle[stroke="#ef4444"] { stroke: #FF6B8A !important; }
+
+/* 可爱主题下输入框 */
+.theme-cute input[type="number"],
+.theme-cute input[type="text"] {
+  border-radius: 12px;
+}
+
+/* 可爱主题下禁用 ugly checkbox */
+.theme-cute input[type="checkbox"] {
+  accent-color: #FF6B8A;
+  border-radius: 4px;
+}
+
+/* 持仓面板可爱化 */
+.theme-cute .portfolio-empty {
+  background: linear-gradient(135deg, #FFF8F0 0%, #FFF5F7 100%);
+}
+
+/* 市场概览可爱化 */
+.theme-cute .market-index-up { color: #FF6B8A !important; }
+.theme-cute .market-index-down { color: #4A9B7F !important; }
+
 body {
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   background-color: var(--color-bg-main);

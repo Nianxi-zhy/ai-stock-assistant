@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    container_name: ai-stock-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist SQLite database and stock list on the host
+      - ./backend/data:/app/data
+    env_file:
+      # Make sure backend/.env exists.
+      # Copy backend/.env.example to backend/.env and fill in OPENAI_API_KEY.
+      - ./backend/.env
+    healthcheck:
+      # Keep in sync with backend/Dockerfile HEALTHCHECK
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: ai-stock-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      # Wait until the backend passes its healthcheck before starting
+      backend:
+        condition: service_healthy
+    environment:
+      # NEXT_PUBLIC_ is baked into the client bundle at build time.
+      # Because the browser makes the requests, use the host-accessible URL.
+      - NEXT_PUBLIC_API_BASE=http://localhost:8000/api/v1
+    healthcheck:
+      # Keep in sync with frontend/Dockerfile HEALTHCHECK
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped

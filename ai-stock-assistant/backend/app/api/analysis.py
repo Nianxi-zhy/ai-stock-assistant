@@ -1,14 +1,17 @@
+import logging
+
 from pydantic import BaseModel
 
 from fastapi import APIRouter, HTTPException
 
 from app.agents.orchestrator import run_agent_pipeline
 from app.schemas.stock import AgentDetail
-from app.services.ai_service import analyze_stock
 from app.services.indicator_service import get_indicator_snapshot
 from app.services.news_service import build_news_summary, get_stock_news_bundle
 from app.services.recommend_service import build_recommendations
 from app.services.rule_engine import evaluate_stock
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -89,8 +92,9 @@ def single_analysis(req: SingleAnalysisRequest):
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("单股分析失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/batch")
@@ -102,5 +106,6 @@ def batch_analysis(req: BatchAnalysisRequest):
             min_rule_score=req.min_rule_score,
         )
         return report
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("批量分析失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")

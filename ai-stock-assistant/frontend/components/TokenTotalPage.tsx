@@ -1,21 +1,25 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import type { TokenTotalResponse, DailyUsage } from "@/lib/api";
 import { fetchTokenTotal } from "@/lib/api";
 
-export default function TokenTotalPage({ refreshKey }: { refreshKey?: number }) {
+export default function TokenTotalPage() {
   const [data, setData] = useState<TokenTotalResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
 
-  useEffect(() => { // eslint-disable-next-line react-hooks/exhaustive-deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const load = () => {
+    setLoading(true);
+    setError("");
     fetchTokenTotal()
       .then(setData)
-      .catch(() => {})
+      .catch((e) => { setError(e instanceof Error ? e.message : "加载失败"); })
       .finally(() => setLoading(false));
-  }, [refreshKey]);
+  };
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -28,6 +32,23 @@ export default function TokenTotalPage({ refreshKey }: { refreshKey?: number }) 
             ))}
           </div>
           <div className="h-96 rounded-2xl bg-(--color-bg-hover)" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-[1440px] px-8 py-6">
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-(--color-text-primary)">总计 Token</h1>
+            <p className="mt-0.5 text-sm text-(--color-text-secondary)">查看 AI 分析资源消耗与使用统计</p>
+          </div>
+        </div>
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{error}</span>
+          <button onClick={load} className="font-medium underline hover:no-underline">重试</button>
         </div>
       </div>
     );
@@ -256,14 +277,21 @@ function StatCard({
   sparkData: number[];
   color: string;
 }) {
+  const colorClasses: Record<string, { bg: string; text: string }> = {
+    "#3B82F6": { bg: "bg-blue-500/[0.06]", text: "text-blue-500" },
+    "#8B5CF6": { bg: "bg-violet-500/[0.06]", text: "text-violet-500" },
+    "#F59E0B": { bg: "bg-amber-500/[0.06]", text: "text-amber-500" },
+    "#10B981": { bg: "bg-emerald-500/[0.06]", text: "text-emerald-500" },
+  };
+  const c = colorClasses[color] || { bg: "bg-(--color-bg-hover)", text: "text-(--color-text-secondary)" };
+
   return (
     <div className="rounded-2xl border border-(--color-border) bg-(--color-bg-card) p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between">
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl"
-          style={{ backgroundColor: `${color}10` }}
+          className={`flex h-10 w-10 items-center justify-center rounded-xl ${c.bg} ${c.text}`}
         >
-          <div style={{ color }}>{icon}</div>
+          {icon}
         </div>
         <div className="h-8 w-16">
           <MiniSparkline data={sparkData} color={color} />

@@ -142,6 +142,8 @@ def assess_market_environment():
 
             realtime_price = get_realtime_price(code, as_index=True)
             if realtime_price and realtime_price > 0:
+                # 先拷贝再覆盖最后一行收盘价，避免原地污染 stock_service 缓存的共享 DataFrame
+                kline = kline.copy()
                 kline.iloc[-1, kline.columns.get_loc("close")] = realtime_price
 
             result = _index_score(kline)

@@ -4,21 +4,25 @@ import { useEffect, useState } from "react";
 import type { SoldWatchItem } from "@/lib/api";
 import { fetchSoldWatch } from "@/lib/api";
 
-export default function SoldWatchPage({ refreshKey = 0 }: { refreshKey?: number }) {
+export default function SoldWatchPage() {
   const [items, setItems] = useState<SoldWatchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState("");
+  const [error, setError] = useState("");
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
+    setError("");
     fetchSoldWatch()
       .then((res) => {
         setItems(res.items);
         setUpdatedAt(res.updated_at);
       })
-      .catch(() => {})
+      .catch((e) => { setError(e instanceof Error ? e.message : "加载失败"); })
       .finally(() => setLoading(false));
-  }, [refreshKey]);
+  };
+
+  useEffect(() => { load(); }, []);
 
   const totalDiff = items.reduce((s, i) => s + i.diff * i.quantity, 0);
 
@@ -36,6 +40,13 @@ export default function SoldWatchPage({ refreshKey = 0 }: { refreshKey?: number 
           <span className="text-[10px] text-(--color-text-tertiary)">数据更新于 {updatedAt}</span>
         )}
       </div>
+
+      {error && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{error}</span>
+          <button onClick={load} className="font-medium underline hover:no-underline">重试</button>
+        </div>
+      )}
 
       <div className="mt-4">
         {loading ? (

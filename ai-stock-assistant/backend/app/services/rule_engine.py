@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 from dataclasses import dataclass
 from time import monotonic
-from typing import Iterable, Optional
+from typing import Any, Dict, Iterable, Optional
 
 import pandas as pd
 
@@ -13,6 +14,8 @@ from app.services.calibrate_service import _param, load_rule_weights
 from app.services.filter_service import get_a_share_spot, passes_price_filter, prescreen_by_spot
 from app.services.indicator_service import build_indicator_snapshot, calculate_indicators
 from app.services.stock_service import get_kline
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -34,7 +37,20 @@ def _is_risky_name(name: str) -> bool:
     return "ST" in upper or "退" in name or "*" in name
 
 
-def _evaluate_rules(enriched: pd.DataFrame, name: str) -> list[RuleCheck]:
+def _load_rule_context() -> Dict[str, Any]:
+    """一次加载本次扫描所需的阈值与权重（底层走 calibrate_service 全表缓存）。"""
+    return {
+        # 阈值优先读 rule_params（校准可调），无记录时用 config 默认值
+        "ma20_ma60_tol": float(_param("thr.ma20_ma60_tol", 0.98)),
+        "rsi_min": float(_param("thr.rsi_min", 30)),
+        "rsi_max": float(_param("thr.rsi_max", 70)),
+        "volume_ratio": float(_param("thr.volume_ratio", 1.05)),
+        # 权重优先读 rule_params（校准结果），无记录时用 config 默认值
+        "weights": load_rule_weights(),
+    }
+
+
+def _evaluate_rules(enriched: pd.DataFrame, name: str, ctx: Optional[Dict[str, Any]] = None) -> list[RuleCheck]:
     latest = enriched.iloc[-1]
     previous = enriched.iloc[-2] if len(enriched) >= 2 else latest
 
@@ -53,14 +69,13 @@ def _evaluate_rules(enriched: pd.DataFrame, name: str) -> list[RuleCheck]:
         and (macd_hist > 0 or macd_hist > prev_macd_hist)
     )
 
-    # 阈值优先读 rule_params（校准可调），无记录时用 config 默认值
-    ma20_ma60_tol = float(_param("thr.ma20_ma60_tol", 0.98))
-    rsi_min = float(_param("thr.rsi_min", 30))
-    rsi_max = float(_param("thr.rsi_max", 70))
-    volume_ratio = float(_param("thr.volume_ratio", 1.05))
-
-    # 权重优先读 rule_params（校准结果），无记录时用 config 默认值
-    weights = load_rule_weights()
+    if ctx is None:
+        ctx = _load_rule_context()
+    ma20_ma60_tol = ctx["ma20_ma60_tol"]
+    rsi_min = ctx["rsi_min"]
+    rsi_max = ctx["rsi_max"]
+    volume_ratio = ctx["volume_ratio"]
+    weights = ctx["weights"]
 
     checks = [
         RuleCheck("close above MA20", close is not None and ma20 is not None and close > ma20, weights.get("close above MA20", 20)),
@@ -85,14 +100,19 @@ def _rule_score(checks: Iterable[RuleCheck]) -> int:
     return round(gained / possible * 100)
 
 
-def evaluate_stock(code: str, name: str, days: int = 80) -> RuleCandidate | None:
+def evaluate_stock(
+    code: str,
+    name: str,
+    days: int = 80,
+    ctx: Optional[Dict[str, Any]] = None,
+) -> RuleCandidate | None:
     try:
         kline = get_kline(code, days=days)
         enriched = calculate_indicators(kline)
         latest_close = _latest_number(enriched.iloc[-1], "close")
         if latest_close is None or _is_risky_name(name) or not passes_price_filter(latest_close):
             return None
-        checks = _evaluate_rules(enriched, name)
+        checks = _evaluate_rules(enriched, name, ctx)
         indicators = build_indicator_snapshot(kline, code=code, name=name)
         passed = [check.name for check in checks if check.passed]
         failed = [check.name for check in checks if not check.passed]
@@ -133,11 +153,13 @@ def screen_candidates(
     candidates: list[RuleCandidate] = []
     pool_size = min(cfg.FULL_SCAN_MAX_WORKERS, len(rows))
 
+    ctx = _load_rule_context()  # 每次扫描加载一次，全部股票复用
+
     pool = ThreadPoolExecutor(max_workers=pool_size)
     timed_out = False
     try:
         futures = {
-            pool.submit(evaluate_stock, code, name, days): i
+            pool.submit(evaluate_stock, code, name, days, ctx): i
             for i, (code, name) in enumerate(rows)
         }
         timeout = None if deadline is None else max(0, deadline - monotonic())
@@ -163,4 +185,4 @@ if __name__ == "__main__":
     import json
 
     result = screen_candidates(max_candidates=10)
-    print(json.dumps([item.model_dump(exclude={"indicators"}) for item in result], ensure_ascii=False, indent=2))
+    logger.info(json.dumps([item.model_dump(exclude={"indicators"}) for item in result], ensure_ascii=False, indent=2))

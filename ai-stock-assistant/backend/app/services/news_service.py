@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -17,8 +18,11 @@ from app.config import (
     NEWS_NOTICE_DAYS,
     NEWS_NOTICE_LIMIT,
     NEWS_SUMMARY_MAX_CHARS,
+    SINA_NEWS_URL,
 )
 from app.schemas.news import NewsItem, StockNewsBundle
+
+logger = logging.getLogger(__name__)
 
 
 def _run_with_timeout(func, timeout=30):
@@ -26,7 +30,8 @@ def _run_with_timeout(func, timeout=30):
         future = executor.submit(func)
         try:
             return future.result(timeout=timeout)
-        except (FuturesTimeoutError, Exception):
+        except (FuturesTimeoutError, Exception) as e:
+            logger.warning("_run_with_timeout 执行失败: %s", e)
             return None
 
 
@@ -112,7 +117,7 @@ def _fetch_em_notices(code: str, limit: int) -> List[NewsItem]:
 
 
 def _fetch_sina_market_news(limit: int = 3) -> List[NewsItem]:
-    url = "https://feed.mix.sina.com.cn/api/roll/get"
+    url = SINA_NEWS_URL
     params = {"pageid": "153", "lid": "2516", "k": "", "num": str(limit)}
     try:
         resp = requests.get(url, params=params, timeout=15, headers={
@@ -191,5 +196,5 @@ def clear_news_cache() -> None:
 
 if __name__ == "__main__":
     bundle = get_stock_news_bundle("600519", "贵州茅台")
-    print(f"{bundle.name}({bundle.code}) 共 {bundle.count} 条")
-    print(build_news_summary(bundle))
+    logger.info(f"{bundle.name}({bundle.code}) 共 {bundle.count} 条")
+    logger.info(build_news_summary(bundle))

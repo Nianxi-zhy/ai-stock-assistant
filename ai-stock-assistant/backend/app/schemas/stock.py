@@ -82,8 +82,8 @@ class RuleCandidate(BaseModel):
     trade_date: str
     close_price: float
     rule_score: int = Field(ge=0, le=100)
-    passed_rules: List[str] = []
-    failed_rules: List[str] = []
+    passed_rules: List[str] = Field(default_factory=list)
+    failed_rules: List[str] = Field(default_factory=list)
     indicators: IndicatorSnapshot
     pe_ratio: Optional[float] = None
     pb_ratio: Optional[float] = None
@@ -105,15 +105,15 @@ class RecommendationItem(BaseModel):
     reason: str
     token_usage: Optional[TokenUsage] = None
     rule_score: Optional[int] = Field(default=None, ge=0, le=100)
-    passed_rules: List[str] = []
-    failed_rules: List[str] = []
+    passed_rules: List[str] = Field(default_factory=list)
+    failed_rules: List[str] = Field(default_factory=list)
     news_count: int = 0
-    agent_details: List[AgentDetail] = []
+    agent_details: List[AgentDetail] = Field(default_factory=list)
     target_price: Optional[float] = None
     stop_loss_price: Optional[float] = None
     trade_date: Optional[str] = None
     analysis_status: Literal["complete", "partial"] = "complete"
-    analysis_warnings: List[str] = []
+    analysis_warnings: List[str] = Field(default_factory=list)
 
 
 class CandidateFailure(BaseModel):
@@ -128,15 +128,15 @@ class RecommendationReport(BaseModel):
     run_id: str = ""
     generated_at: str = ""
     as_of_trade_date: Optional[str] = None
-    parameters: dict[str, Any] = {}
-    budget: dict[str, Any] = {}
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    budget: dict[str, Any] = Field(default_factory=dict)
     filter_mode: dict
     candidate_count: int
     analyzed_count: int
     count: int
     usage_summary: TokenUsage
     recommendations: List[RecommendationItem]
-    failed_candidates: List[CandidateFailure] = []
+    failed_candidates: List[CandidateFailure] = Field(default_factory=list)
     env_status: Optional[str] = None
     env_score: Optional[int] = None
     paper_mode: bool = False

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter
 
 from app.services import paper_trade_service
@@ -13,4 +15,4 @@ async def get_paper_track():
 @router.post("/track/sync")
 async def sync_paper_track():
     """同步推荐→跟踪表，刷新最新价并结算到期观察。"""
-    return paper_trade_service.update_and_settle()
+    return await asyncio.to_thread(paper_trade_service.update_and_settle)

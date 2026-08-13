@@ -1,4 +1,5 @@
 """收盘自动回测调度 + 环境分层分析 + 懒触发（阶段 4.3 / 4.5 / 5）"""
+import logging
 import os
 import threading
 from datetime import datetime, timedelta
@@ -10,6 +11,8 @@ from app.services.backtest_research_service import get_active_strategy_params
 from app.services.backtest_service import STRATEGY_NAMES, scan_strategy
 from app.services.indicator_service import detect_market_phase
 from app.services.stock_service import get_stock_name
+
+logger = logging.getLogger(__name__)
 
 # 懒触发窗口：当天 15:10 之后首次打开应用时自动跑（回测免费；推荐可选，见 AUTO_RECOMMEND_ON_OPEN）
 LAZY_TRIGGER_HOUR = int(os.getenv("LAZY_TRIGGER_HOUR", "15"))
@@ -187,7 +190,8 @@ def _latest_recommendation_codes(limit: int) -> List[Tuple[str, str]]:
         if not name:
             try:
                 name = get_stock_name(code)
-            except Exception:
+            except Exception as e:
+                logger.warning("获取股票名称失败: %s", e)
                 name = ""
         result.append((code, name))
         if len(result) >= limit:
@@ -211,7 +215,8 @@ def _backfill_env(env_status: str, env_score: int, codes: List[str], strategy: s
             updated += cur.rowcount
         conn.commit()
         return updated > 0
-    except Exception:
+    except Exception as e:
+        logger.warning("回填环境信息失败: %s", e)
         return False
     finally:
         conn.close()
@@ -221,10 +226,14 @@ def _has_run_today(day: str, job: str = "daily-backtest") -> bool:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT 1 FROM daily_job_log WHERE day = ? AND job = ?", (day, job)
+            # 超过 2 小时仍为 running 的视为崩溃僵尸记录，不阻止当日重试
+            """SELECT 1 FROM daily_job_log WHERE day = ? AND job = ?
+               AND NOT (status = 'running' AND triggered_at <= datetime('now', 'localtime', '-2 hours'))""",
+            (day, job),
         ).fetchone()
         return row is not None
-    except Exception:
+    except Exception as e:
+        logger.warning("检查今日任务是否已运行失败: %s", e)
         return False
     finally:
         conn.close()
@@ -234,13 +243,21 @@ def _claim_job(day: str, job: str = "daily-backtest") -> bool:
     """原子抢占当天任务（INSERT OR IGNORE + 复合主键），返回是否抢到。"""
     conn = get_connection()
     try:
+        # 崩溃恢复：清除超过 2 小时仍为 running 的僵尸记录，使当日任务可重新认领
+        conn.execute(
+            """DELETE FROM daily_job_log
+               WHERE day = ? AND job = ? AND status = 'running'
+                 AND triggered_at <= datetime('now', 'localtime', '-2 hours')""",
+            (day, job),
+        )
         cur = conn.execute(
             "INSERT OR IGNORE INTO daily_job_log (day, job, status) VALUES (?, ?, 'running')",
             (day, job),
         )
         conn.commit()
         return cur.rowcount == 1
-    except Exception:
+    except Exception as e:
+        logger.warning("抢占任务失败: %s", e)
         return False
     finally:
         conn.close()
@@ -256,7 +273,8 @@ def _finish_job(day: str, detail: str, job: str = "daily-backtest") -> None:
             (detail[:2000], day, job),
         )
         conn.commit()
-    except Exception:
+    except Exception as e:
+        logger.warning("完成任务记录失败: %s", e)
         pass
     finally:
         conn.close()
@@ -269,7 +287,8 @@ def _has_recommendation_today(day: str) -> bool:
             "SELECT 1 FROM recommendation_run WHERE recommend_date = ? LIMIT 1", (day,)
         ).fetchone()
         return row is not None
-    except Exception:
+    except Exception as e:
+        logger.warning("检查今日推荐是否已存在失败: %s", e)
         return False
     finally:
         conn.close()

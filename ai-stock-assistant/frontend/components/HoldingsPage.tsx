@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import type { HoldingItem, HoldingListResponse, HoldingAdvice } from "@/lib/api";
@@ -19,7 +19,7 @@ import {
 
 type Tab = "holding" | "sold";
 
-export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { refreshKey?: number; onHoldingDeleted?: (code: string) => void }) {
+export default function HoldingsPage({ onHoldingDeleted }: { onHoldingDeleted?: (code: string) => void }) {
   const [tab, setTab] = useState<Tab>("holding");
   const [holdings, setHoldings] = useState<HoldingListResponse | null>(null);
   const [adviceMap, setAdviceMap] = useState<Map<number, HoldingAdvice>>(new Map());
@@ -34,12 +34,14 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
   const [sellOrderModal, setSellOrderModal] = useState<{ h: HoldingItem; price: number; loadingPrice: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [refreshingPrices, setRefreshingPrices] = useState(false);
+  const [error, setError] = useState("");
 
   const load = useCallback((status: Tab) => {
+    setError("");
     setLoading(true);
     fetchHoldings(status)
       .then(setHoldings)
-      .catch(() => {})
+      .catch((e) => { setError(e instanceof Error ? e.message : "加载失败"); })
       .finally(() => setLoading(false));
 
     if (status === "holding") {
@@ -49,11 +51,22 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
           res.items.forEach((a) => map.set(a.holding_id, a));
           setAdviceMap(map);
         })
-        .catch(() => {});
+        .catch((e) => { setError(e instanceof Error ? e.message : "加载失败"); });
     }
   }, []);
 
-  useEffect(() => { load(tab); }, [tab, load, refreshKey]);
+  useEffect(() => { load(tab); }, [tab, load]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (addModal) setAddModal(null);
+        if (sellOrderModal) setSellOrderModal(null);
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [addModal, sellOrderModal]);
 
   const handleSaveEdit = async (h: HoldingItem) => {
     setSubmitting(true);
@@ -65,7 +78,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
       });
       setEditId(null);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "更新失败");
+    }
     setSubmitting(false);
   };
 
@@ -74,9 +89,12 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
     setSubmitting(true);
     try {
       await sellHolding(h.id, parseFloat(sellPrice), "手动卖出");
+      onHoldingDeleted?.(h.code);
       setSellId(null);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "卖出失败");
+    }
     setSubmitting(false);
   };
 
@@ -86,7 +104,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
       await deleteHolding(h.id);
       onHoldingDeleted?.(h.code);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "删除失败");
+    }
   };
 
   const openAddModal = async (h: HoldingItem) => {
@@ -95,8 +115,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
     try {
       const data = await fetchRealtimePrice(h.code);
       setAddModal((prev) => prev && { ...prev, addPrice: data.price, loadingPrice: false });
-    } catch {
+    } catch (e) {
       setAddModal((prev) => prev && { ...prev, loadingPrice: false });
+      setError(e instanceof Error ? e.message : "加载失败");
     }
   };
 
@@ -107,7 +128,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
       await addPosition(addModal.h.id, { add_price: addModal.addPrice, add_quantity: addModal.addQty });
       setAddModal(null);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加仓失败");
+    }
     setSubmitting(false);
   };
 
@@ -116,8 +139,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
     try {
       const data = await fetchRealtimePrice(h.code);
       setSellOrderModal((prev) => prev && { ...prev, price: data.price, loadingPrice: false });
-    } catch {
+    } catch (e) {
       setSellOrderModal((prev) => prev && { ...prev, loadingPrice: false });
+      setError(e instanceof Error ? e.message : "加载失败");
     }
   };
 
@@ -128,7 +152,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
       await createSellOrder(sellOrderModal.h.id, sellOrderModal.price);
       setSellOrderModal(null);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "挂单失败");
+    }
     setSubmitting(false);
   };
 
@@ -138,7 +164,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
       await updateSellOrderPrice(h.id, h.sell_price);
       setEditId(null);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "更新挂单失败");
+    }
     setSubmitting(false);
   };
 
@@ -147,7 +175,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
     try {
       await confirmSell(h.id);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "确认成交失败");
+    }
     setSubmitting(false);
   };
 
@@ -156,7 +186,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
     try {
       await cancelSellOrder(h.id);
       load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "取消挂单失败");
+    }
     setSubmitting(false);
   };
 
@@ -165,7 +197,9 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
     try {
       await refreshHoldingsPrices();
       await load(tab);
-    } catch {}
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "刷新价格失败");
+    }
     setRefreshingPrices(false);
   };
 
@@ -188,6 +222,7 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
         <div className="flex items-center gap-3">
           {tab === "holding" && (
             <button onClick={handleRefreshPrices} disabled={refreshingPrices}
+              aria-label="刷新价格"
               className="flex items-center gap-1.5 rounded-lg border border-(--color-border) bg-(--color-bg-card) px-3 py-1.5 text-xs font-semibold text-(--color-text-secondary) transition-colors hover:bg-(--color-bg-raised) hover:text-(--color-text-primary) disabled:opacity-50">
               <svg className={`h-3.5 w-3.5 ${refreshingPrices ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -221,6 +256,14 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
           )}
         </div>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{error}</span>
+          <button onClick={() => load(tab)} className="font-medium underline hover:no-underline">重试</button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mt-4 flex gap-1 rounded-lg bg-(--color-bg-hover) p-1 w-fit">
@@ -302,10 +345,10 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
                         </div>
                       ) : (
                         <>
-                          <button onClick={() => openAddModal(h)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-100">加仓</button>
-                          <button onClick={() => openSellOrderModal(h)} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-100">挂单卖出</button>
-                          <button onClick={() => { setSellId(h.id); setSellPrice(h.current_price.toFixed(3)); }} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100">立即卖出</button>
-                          <button onClick={() => handleDelete(h)} className="rounded-lg border border-(--color-border) px-3 py-1.5 text-xs font-semibold text-(--color-text-secondary) transition-colors hover:bg-(--color-bg-raised) hover:text-red-500">撤销</button>
+                          <button onClick={() => openAddModal(h)} aria-label="加仓" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-600 transition-colors hover:bg-emerald-100">加仓</button>
+                          <button onClick={() => openSellOrderModal(h)} aria-label="挂单卖出" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-100">挂单卖出</button>
+                          <button onClick={() => { setSellId(h.id); setSellPrice(h.current_price.toFixed(3)); }} aria-label="立即卖出" className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100">立即卖出</button>
+                          <button onClick={() => handleDelete(h)} aria-label="撤销建仓" className="rounded-lg border border-(--color-border) px-3 py-1.5 text-xs font-semibold text-(--color-text-secondary) transition-colors hover:bg-(--color-bg-raised) hover:text-red-500">撤销</button>
                         </>
                       )}
                     </div>
@@ -329,10 +372,10 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
                       {h.stop_loss > 0 && <span className="text-red-500">止损 ¥{h.stop_loss.toFixed(3)}</span>}
                       {h.take_profit > 0 && <span className="text-green-600">止盈 ¥{h.take_profit.toFixed(3)}</span>}
                       {tab === "holding" && h.status === "holding" && (
-                        <button onClick={() => { setEditId(h.id); setEditBp(h.buy_price.toFixed(3)); setEditSl(""); setEditTp(""); }} className="text-(--color-accent) hover:text-(--color-accent-hover)">修改</button>
+                        <button onClick={() => { setEditId(h.id); setEditBp(h.buy_price.toFixed(3)); setEditSl(""); setEditTp(""); }} aria-label="修改持仓信息" className="text-(--color-accent) hover:text-(--color-accent-hover)">修改</button>
                       )}
                       {tab === "holding" && h.status === "pending" && (
-                        <button onClick={() => { setEditId(h.id); setEditBp(h.sell_price.toFixed(3)); }} className="text-amber-600 hover:text-amber-700">修改挂单价</button>
+                        <button onClick={() => { setEditId(h.id); setEditBp(h.sell_price.toFixed(3)); }} aria-label="修改挂单价" className="text-amber-600 hover:text-amber-700">修改挂单价</button>
                       )}
                     </>
                   )}
@@ -380,9 +423,15 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
 
       {/* Add Position Modal */}
       {addModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setAddModal(null)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+          onClick={() => setAddModal(null)}
+        >
           <div className="w-[380px] rounded-2xl bg-(--color-bg-card) p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-(--color-text-primary)">加仓确认</h3>
+            <h3 id="add-modal-title" className="text-base font-bold text-(--color-text-primary)">加仓确认</h3>
             <div className="mt-1 text-sm text-(--color-text-secondary)">{addModal.h.name} ({addModal.h.code})</div>
             <div className="mt-3 flex gap-4 rounded-lg bg-(--color-bg-raised) px-3 py-2 text-xs text-(--color-text-secondary)">
               <span>当前 {addModal.h.quantity} 股</span>
@@ -424,9 +473,15 @@ export default function HoldingsPage({ refreshKey = 0, onHoldingDeleted }: { ref
 
       {/* Sell Order Modal */}
       {sellOrderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setSellOrderModal(null)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sell-order-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+          onClick={() => setSellOrderModal(null)}
+        >
           <div className="w-[380px] rounded-2xl bg-(--color-bg-card) p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-(--color-text-primary)">挂单卖出</h3>
+            <h3 id="sell-order-modal-title" className="text-base font-bold text-(--color-text-primary)">挂单卖出</h3>
             <div className="mt-1 text-sm text-(--color-text-secondary)">{sellOrderModal.h.name} ({sellOrderModal.h.code})</div>
             <div className="mt-3 flex gap-4 rounded-lg bg-(--color-bg-raised) px-3 py-2 text-xs text-(--color-text-secondary)">
               <span>持仓价 ¥{sellOrderModal.h.buy_price.toFixed(3)}</span>

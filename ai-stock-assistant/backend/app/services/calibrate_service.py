@@ -10,8 +10,10 @@
 """
 from __future__ import annotations
 
+import logging
 import math
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from time import monotonic
@@ -22,6 +24,8 @@ from app.db import get_connection
 from app.services.filter_service import prescreen_by_spot, get_a_share_spot
 from app.services.indicator_service import calculate_indicators
 from app.services.stock_service import get_kline
+
+logger = logging.getLogger(__name__)
 
 RULE_NAMES = [
     "close above MA20",
@@ -39,21 +43,56 @@ DEFAULT_WEIGHTS = {
 }
 
 
-def _param(key: str, default: Any) -> Any:
+# rule_params 全表缓存：一次加载，多处复用，写后显式失效。
+# 热路径（每股 5 次查询）经缓存后每次扫描仅 1 次全表查询。
+_params_lock = threading.Lock()
+_params_cache: Optional[Dict[str, tuple]] = None
+
+
+def _load_all_params() -> Dict[str, tuple]:
+    """一次查询把 rule_params 全表读成 {key: (value, value_str)}。"""
     conn = get_connection()
     try:
-        row = conn.execute("SELECT value, value_str FROM rule_params WHERE key = ?", (key,)).fetchone()
-        if row is None:
-            return default
-        if isinstance(default, bool):
-            return row["value_str"] or row["value"]
-        if isinstance(default, int):
-            return int(row["value"] or 0)
-        return float(row["value"] or 0.0)
-    except Exception:
-        return default
+        rows = conn.execute("SELECT key, value, value_str FROM rule_params").fetchall()
+        return {r["key"]: (r["value"], r["value_str"]) for r in rows}
     finally:
         conn.close()
+
+
+def _get_params() -> Dict[str, tuple]:
+    """读缓存；未命中时加载并填充（双检锁，加载失败不缓存以便下次重试）。"""
+    global _params_cache
+    if _params_cache is not None:
+        return _params_cache
+    with _params_lock:
+        if _params_cache is None:
+            try:
+                _params_cache = _load_all_params()
+            except Exception:
+                return {}
+        return _params_cache
+
+
+def invalidate_params_cache() -> None:
+    """写 rule_params 后调用，显式失效缓存。"""
+    global _params_cache
+    with _params_lock:
+        _params_cache = None
+
+
+def _param(key: str, default: Any) -> Any:
+    try:
+        row = _get_params().get(key)
+        if row is None:
+            return default
+        value, value_str = row
+        if isinstance(default, bool):
+            return value_str or value
+        if isinstance(default, int):
+            return int(value or 0)
+        return float(value or 0.0)
+    except Exception:
+        return default
 
 
 def _latest(row, field: str) -> Optional[float]:
@@ -200,25 +239,22 @@ def apply_rule_params(result: Dict[str, Any]) -> int:
         raise
     finally:
         conn.close()
+    invalidate_params_cache()
     return n
 
 
 def load_rule_weights() -> Dict[str, int]:
-    """读取当前生效的规则权重（校准优先，否则默认），供 rule_engine 使用。"""
-    conn = get_connection()
+    """读取当前生效的规则权重（校准优先，否则默认），供 rule_engine 使用。走全表缓存。"""
     try:
-        rows = conn.execute("SELECT key, value FROM rule_params WHERE key LIKE 'weight.%'").fetchall()
         weights = {}
-        for r in rows:
-            name = r["key"].replace("weight.", "", 1)
-            weights[name] = int(r["value"] or 0)
+        for key, (value, _value_str) in _get_params().items():
+            if key.startswith("weight."):
+                weights[key.replace("weight.", "", 1)] = int(value or 0)
         for rule in RULE_NAMES:
             weights.setdefault(rule, cfg.RULE_WEIGHTS.get(rule, DEFAULT_WEIGHTS[rule]))
         return weights
     except Exception:
         return dict(cfg.RULE_WEIGHTS)
-    finally:
-        conn.close()
 
 
 if __name__ == "__main__":
@@ -226,4 +262,4 @@ if __name__ == "__main__":
     result = calibrate_rule_weights()
     import json
 
-    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    logger.info(json.dumps(result, ensure_ascii=False, indent=2, default=str))

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { PaperTrackResponse } from "@/lib/api";
 import { fetchPaperTrack, syncPaperTrack } from "@/lib/api";
 import { GLASS_CARD } from "@/lib/glass";
+import StatCard from "./StatCard";
 
 const ENV_META: Record<string, { label: string; cls: string }> = {
   suitable: { label: "适宜", cls: "bg-green-100 text-green-700" },
@@ -11,19 +12,21 @@ const ENV_META: Record<string, { label: string; cls: string }> = {
   unsuitable: { label: "较差", cls: "bg-red-100 text-red-700" },
 };
 
-export default function PaperTrackPage({ refreshKey }: { refreshKey?: number }) {
+export default function PaperTrackPage() {
   const [data, setData] = useState<PaperTrackResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const load = () => {
     setLoading(true);
+    setError("");
     fetchPaperTrack()
       .then(setData)
-      .catch(() => {})
+      .catch((e) => { setError(e instanceof Error ? e.message : "加载失败"); })
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load() }, [refreshKey]);
+  useEffect(() => { load() }, []);
 
   // 打开页面时自动同步一次（每天最多一次）
   useEffect(() => {
@@ -48,6 +51,13 @@ export default function PaperTrackPage({ refreshKey }: { refreshKey?: number }) 
       <p className="mt-0.5 text-xs text-(--color-text-secondary)">
         推荐票模拟买入与结算，不参与真实交易统计，用于验证系统在弱市中的表现
       </p>
+
+      {error && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{error}</span>
+          <button onClick={load} className="font-medium underline hover:no-underline">重试</button>
+        </div>
+      )}
 
       {/* Stats cards */}
       {data && (
@@ -170,11 +180,3 @@ export default function PaperTrackPage({ refreshKey }: { refreshKey?: number }) 
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="rounded-2xl border border-(--color-border) bg-(--color-bg-card) p-5 shadow-sm">
-      <p className="text-xs font-medium text-(--color-text-secondary)">{label}</p>
-      <p className={`mt-1 text-xl font-bold ${color || "text-(--color-text-primary)"}`}>{value}</p>
-    </div>
-  );
-}

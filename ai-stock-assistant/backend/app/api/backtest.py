@@ -1,4 +1,6 @@
+import asyncio
 import json
+import logging
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
@@ -11,6 +13,8 @@ from app.services.backtest_service import (
     run_backtest,
     scan_strategy,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/backtest", tags=["backtest"])
 
@@ -38,14 +42,16 @@ class ResearchRequest(BaseModel):
 async def backtest_runs(limit: int = 20):
     try:
         return list_backtest_runs(limit=max(1, min(limit, 100)))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("获取回测记录列表失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/scan")
 async def backtest_scan(req: ScanRequest):
     try:
-        result = scan_strategy(
+        result = await asyncio.to_thread(
+            scan_strategy,
             req.code,
             strategy=req.strategy,
             param_grid=req.param_grid,
@@ -58,14 +64,16 @@ async def backtest_scan(req: ScanRequest):
         return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("策略参数扫描失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/research")
 async def backtest_research(req: ResearchRequest):
     try:
-        result = research_backtest(
+        result = await asyncio.to_thread(
+            research_backtest,
             req.code,
             strategy=req.strategy,
             param_grid=req.param_grid,
@@ -79,8 +87,9 @@ async def backtest_research(req: ResearchRequest):
         return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("回测研究失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.get("/{code}")
@@ -96,14 +105,17 @@ async def backtest(
             params_dict = json.loads(params) if params else {}
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="params 必须是合法的 JSON")
-        result = run_backtest(code, strategy=strategy, days=days, initial_cash=initial_cash, params=params_dict)
+        result = await asyncio.to_thread(
+            run_backtest, code, strategy=strategy, days=days, initial_cash=initial_cash, params=params_dict
+        )
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
         return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("回测执行失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 class BatchScanRequest(BaseModel):
@@ -134,7 +146,8 @@ async def backtest_batch_scan(req: BatchScanRequest):
             raise HTTPException(status_code=400, detail="codes 不能为空")
         if not req.param_grid:
             raise HTTPException(status_code=400, detail="param_grid 不能为空")
-        result = batch_scan(
+        result = await asyncio.to_thread(
+            batch_scan,
             req.codes,
             strategy=req.strategy,
             param_grid=req.param_grid,
@@ -147,8 +160,9 @@ async def backtest_batch_scan(req: BatchScanRequest):
         return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("批量扫描失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/walkforward")
@@ -156,7 +170,8 @@ async def backtest_walk_forward(req: WalkForwardRequest):
     try:
         if not req.param_grid:
             raise HTTPException(status_code=400, detail="param_grid 不能为空")
-        result = walk_forward(
+        result = await asyncio.to_thread(
+            walk_forward,
             req.code,
             strategy=req.strategy,
             param_grid=req.param_grid,
@@ -172,5 +187,6 @@ async def backtest_walk_forward(req: WalkForwardRequest):
         return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("walk-forward 回测失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")

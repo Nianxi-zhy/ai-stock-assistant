@@ -1,8 +1,12 @@
 """TechnicalAgent — 分析技术指标"""
 from __future__ import annotations
 
+import logging
+
 from app.agents.base import AgentResult
 from app.agents.llm import call_llm
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """你是一名 A 股技术分析师。根据股票的技术指标，判断走势倾向。
 只返回 JSON：
@@ -32,7 +36,8 @@ K 线概要：
             details=str(data.get("details", "")),
             token_usage=usage,
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("Agent %s failed: %s", "TechnicalAgent", e)
         return AgentResult(
             agent_name="TechnicalAgent",
             stars=3,

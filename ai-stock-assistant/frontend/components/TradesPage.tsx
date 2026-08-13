@@ -4,17 +4,20 @@ import { useEffect, useState } from "react";
 import type { TradeListResponse, TradeStatsResponse, MonthlyPnL } from "@/lib/api";
 import { fetchTrades, fetchTradeStats, fetchMonthlyPnL } from "@/lib/api";
 import { GLASS_CARD } from "@/lib/glass";
+import StatCard from "./StatCard";
 
-export default function TradesPage({ refreshKey }: { refreshKey?: number }) {
+export default function TradesPage() {
   const [trades, setTrades] = useState<TradeListResponse | null>(null);
   const [stats, setStats] = useState<TradeStatsResponse | null>(null);
   const [monthly, setMonthly] = useState<MonthlyPnL[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [filterType, setFilterType] = useState("");
   const [sortDir, setSortDir] = useState("desc");
 
   const load = () => {
     setLoading(true);
+    setError("");
     Promise.all([
       fetchTrades(100, filterType || undefined, sortDir),
       fetchTradeStats(),
@@ -25,16 +28,23 @@ export default function TradesPage({ refreshKey }: { refreshKey?: number }) {
         setStats(s);
         setMonthly(m);
       })
-      .catch(() => {})
+      .catch((e) => { setError(e instanceof Error ? e.message : "加载失败"); })
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load() }, [filterType, sortDir, refreshKey]);
+  useEffect(() => { load() }, [filterType, sortDir]);
 
   return (
     <div className="mx-auto max-w-[1440px] px-8 py-6">
       <h2 className="text-lg font-bold text-(--color-text-primary)">交易记录</h2>
       <p className="mt-0.5 text-xs text-(--color-text-secondary)">历史交易与统计</p>
+
+      {error && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{error}</span>
+          <button onClick={load} className="font-medium underline hover:no-underline">重试</button>
+        </div>
+      )}
 
       {/* Stats cards */}
       {stats && (
@@ -61,7 +71,7 @@ export default function TradesPage({ refreshKey }: { refreshKey?: number }) {
               按卖出月份统计 · {monthly.length} 个月
             </span>
           </div>
-          <div className="flex items-end gap-3" style={{ height: 160 }}>
+          <div className="flex h-40 items-end gap-3">
             {monthly.map((m, i) => {
               const maxAbs = Math.max(...monthly.map((x) => Math.abs(x.total_pnl)), 1);
               const barH = Math.max((Math.abs(m.total_pnl) / maxAbs) * 100, 4);
@@ -80,6 +90,7 @@ export default function TradesPage({ refreshKey }: { refreshKey?: number }) {
                           ? "bg-[linear-gradient(to_top,rgba(34,197,94,0.35),rgba(34,197,94,0.85))]"
                           : "bg-[linear-gradient(to_top,rgba(239,68,68,0.35),rgba(239,68,68,0.85))]"
                       } ${isLatest ? "ring-2 ring-(--color-accent)" : ""}`}
+                      // barH 是运行时计算百分比，无法用静态 Tailwind 类表达
                       style={{ height: `${barH}%` }}
                     />
                   </div>
@@ -182,11 +193,3 @@ export default function TradesPage({ refreshKey }: { refreshKey?: number }) {
   );
 }
 
-function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="rounded-2xl border border-(--color-border) bg-(--color-bg-card) p-5 shadow-sm">
-      <p className="text-xs font-medium text-(--color-text-secondary)">{label}</p>
-      <p className={`mt-1 text-xl font-bold ${color || "text-(--color-text-primary)"}`}>{value}</p>
-    </div>
-  );
-}

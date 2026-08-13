@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import type { SingleAnalysisResponse, RecommendationItem, KlineBar } from "@/lib/api";
-import { fetchSingleAnalysis, fetchKline, fetchRealtimePrice } from "@/lib/api";
+import { fetchSingleAnalysis, fetchKline } from "@/lib/api";
+import { AGENT_ICONS, getSignalClass } from "@/lib/constants";
+import BuyModal from "./BuyModal";
 import KlineChart from "./KlineChart";
 import { MacdChart, RsiChart, BollChart } from "./IndicatorCharts";
 import type { IndicatorRecord } from "@/lib/api";
@@ -11,16 +13,10 @@ import { fetchIndicatorsHistory } from "@/lib/api";
 interface StockDetailProps {
   stock: RecommendationItem;
   onBack: () => void;
-  boughtMap?: Record<string, number>;
-  onBuy?: (code: string, name: string, price: number, quantity?: number) => void;
-  onUndo?: (code: string) => void;
+  boughtMap: Record<string, number>;
+  onBuy: (code: string, name: string, price: number, quantity?: number) => Promise<void>;
+  onUndo: (code: string) => Promise<void>;
 }
-
-const AGENT_ICONS: Record<string, string> = {
-  news: "📰",
-  technical: "📊",
-  risk: "⚠️",
-};
 
 const LOADING_STEPS = [
   "获取 K 线数据...",
@@ -31,25 +27,20 @@ const LOADING_STEPS = [
   "🧠 DecisionAgent 综合决策...",
 ];
 
-function AgentCard({ agent }: { agent: SingleAnalysisResponse["agent_details"][number] }) {
-  const signalColors: Record<string, string> = {
-    "利好": "text-green-600 bg-green-50 border-green-200",
-    "偏利好": "text-green-600 bg-green-50 border-green-200",
-    "看涨": "text-green-600 bg-green-50 border-green-200",
-    "偏看涨": "text-green-600 bg-green-50 border-green-200",
-    "低风险": "text-green-600 bg-green-50 border-green-200",
-    "偏低风险": "text-green-600 bg-green-50 border-green-200",
-    "中性": "text-blue-600 bg-blue-50 border-blue-200",
-    "震荡": "text-blue-600 bg-blue-50 border-blue-200",
-    "中等风险": "text-blue-600 bg-blue-50 border-blue-200",
-    "偏利空": "text-orange-600 bg-orange-50 border-orange-200",
-    "偏看跌": "text-orange-600 bg-orange-50 border-orange-200",
-    "偏高风险": "text-orange-600 bg-orange-50 border-orange-200",
-    "利空": "text-red-600 bg-red-50 border-red-200",
-    "看跌": "text-red-600 bg-red-50 border-red-200",
-    "高风险": "text-red-600 bg-red-50 border-red-200",
+function getAgentSignalBadgeClass(signal: string): string {
+  const textColor = getSignalClass(signal);
+  const badgeMap: Record<string, string> = {
+    "text-green-600": "text-green-600 bg-green-50 border-green-200",
+    "text-blue-600": "text-blue-600 bg-blue-50 border-blue-200",
+    "text-orange-600": "text-orange-600 bg-orange-50 border-orange-200",
+    "text-red-600": "text-red-600 bg-red-50 border-red-200",
+    "text-gray-600": "text-(--color-text-secondary) bg-(--color-bg-raised) border-(--color-border)",
   };
-  const signalClass = signalColors[agent.signal] || "text-(--color-text-secondary) bg-(--color-bg-raised) border-(--color-border)";
+  return badgeMap[textColor] || badgeMap["text-gray-600"];
+}
+
+function AgentCard({ agent }: { agent: SingleAnalysisResponse["agent_details"][number] }) {
+  const signalClass = getAgentSignalBadgeClass(agent.signal);
 
   return (
     <div className="rounded-xl border border-(--color-border) bg-(--color-bg-card) p-4 shadow-sm">
@@ -83,7 +74,7 @@ export default function StockDetail({ stock, onBack, boughtMap, onBuy, onUndo }:
   const [klineData, setKlineData] = useState<KlineBar[]>([]);
   const [indicatorData, setIndicatorData] = useState<IndicatorRecord[]>([]);
   const [useCached, setUseCached] = useState(false);
-  const [buyModal, setBuyModal] = useState<{ price: number; quantity: number; realtimePrice: number | null; loadingPrice: boolean; buying: boolean } | null>(null);
+  const [buyModalOpen, setBuyModalOpen] = useState(false);
 
   useEffect(() => {
     const hasCached = stock.agent_details && stock.agent_details.length > 0;
@@ -105,8 +96,8 @@ export default function StockDetail({ stock, onBack, boughtMap, onBuy, onUndo }:
         passed_rules: (stock as any).passed_rules ?? [],
         failed_rules: (stock as any).failed_rules ?? [],
       });
-      fetchKline(code, 60).then((k) => setKlineData(k.klines)).catch(() => {});
-      fetchIndicatorsHistory(code, 120).then((r) => setIndicatorData(r.records)).catch(() => {});
+      fetchKline(code, 60).then((k) => setKlineData(k.klines)).catch((e) => console.warn("[StockDetail] K线加载失败:", e.message));
+      fetchIndicatorsHistory(code, 120).then((r) => setIndicatorData(r.records)).catch((e) => console.warn("[StockDetail] 指标加载失败:", e.message));
       return;
     }
 
@@ -130,31 +121,34 @@ export default function StockDetail({ stock, onBack, boughtMap, onBuy, onUndo }:
     return () => clearInterval(advance);
   }, [code, name, stock]);
 
-  const openBuyModal = async () => {
-    setBuyModal({ price: 0, quantity: 100, realtimePrice: null, loadingPrice: true, buying: false });
-    try {
-      const realtime = await fetchRealtimePrice(code);
-      setBuyModal((prev) => prev && { ...prev, realtimePrice: realtime.price, price: realtime.price, loadingPrice: false });
-    } catch {
-      setBuyModal((prev) => prev && { ...prev, loadingPrice: false });
-    }
+  const openBuyModal = () => {
+    setBuyModalOpen(true);
   };
 
-  const confirmBuy = async () => {
-    if (!buyModal || !buyModal.price || !onBuy) return;
-    setBuyModal((prev) => prev && { ...prev, buying: true });
-    await onBuy(code, name, buyModal.price, buyModal.quantity);
-    setBuyModal(null);
+  const confirmBuy = async (price: number, quantity: number) => {
+    await onBuy(code, name, price, quantity);
   };
 
-  const handleUndo = async () => {
-    if (!onUndo) return;
+  const onUndoClick = async () => {
     await onUndo(code);
   };
 
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onBack();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onBack]);
+
   return (
-    <div className="mx-auto max-w-[1440px] px-8 py-6">
-      <button onClick={onBack} className="mb-4 flex items-center gap-1 text-sm font-medium text-(--color-accent) transition-colors hover:text-blue-700">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stock-detail-title"
+      className="mx-auto max-w-[1440px] px-8 py-6"
+    >
+      <button onClick={onBack} aria-label="返回" className="mb-4 flex items-center gap-1 text-sm font-medium text-(--color-accent) transition-colors hover:text-blue-700">
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
@@ -187,7 +181,7 @@ export default function StockDetail({ stock, onBack, boughtMap, onBuy, onUndo }:
           <div className="flex items-start justify-between rounded-2xl border border-(--color-border) bg-(--color-bg-card) p-6 shadow-sm">
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-(--color-text-primary)">{data.name}</h1>
+                <h1 id="stock-detail-title" className="text-2xl font-bold text-(--color-text-primary)">{data.name}</h1>
                 <span className="text-sm font-mono text-(--color-text-tertiary)">{data.code}</span>
                 <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
                   data.action === "买入" ? "bg-blue-100 text-blue-700" :
@@ -214,25 +208,25 @@ export default function StockDetail({ stock, onBack, boughtMap, onBuy, onUndo }:
                 </div>
               </div>
             </div>
-            {onBuy && (
-              <div className="flex shrink-0 items-center gap-2">
-                {boughtMap?.[code] ? (
-                  <button
-                    onClick={handleUndo}
-                    className="rounded-xl border border-red-300/40 bg-red-100/40 px-4 py-2 text-sm font-semibold text-red-700 shadow-sm backdrop-blur-md transition-all hover:bg-red-100/60 active:scale-95"
-                  >
-                    已买入 · 撤销
-                  </button>
-                ) : (
-                  <button
-                    onClick={openBuyModal}
-                    className="rounded-xl border border-white/30 bg-gradient-to-b from-blue-50 to-blue-100/80 px-5 py-2 text-sm font-semibold text-[#3B82F6] shadow-[0_2px_8px_rgba(59,130,246,0.15)] backdrop-blur-md transition-all hover:shadow-[0_4px_16px_rgba(59,130,246,0.25)] hover:border-blue-200 active:scale-95"
-                  >
-                    买入
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              {boughtMap[code] ? (
+                <button
+                  onClick={onUndoClick}
+                  aria-label="撤销买入"
+                  className="rounded-xl border border-red-300/40 bg-red-100/40 px-4 py-2 text-sm font-semibold text-red-700 shadow-sm backdrop-blur-md transition-all hover:bg-red-100/60 active:scale-95"
+                >
+                  已买入 · 撤销
+                </button>
+              ) : (
+                <button
+                  onClick={openBuyModal}
+                  aria-label="买入"
+                  className="rounded-xl bg-[#3B82F6] px-5 py-2 text-sm font-semibold text-white shadow-[0_2px_8px_rgba(59,130,246,0.25)] transition-all hover:bg-blue-600 hover:shadow-[0_4px_16px_rgba(59,130,246,0.35)] active:scale-95"
+                >
+                  买入
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Rule scoring */}
@@ -315,57 +309,13 @@ export default function StockDetail({ stock, onBack, boughtMap, onBuy, onUndo }:
       )}
 
       {/* Buy Modal */}
-      {buyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setBuyModal(null)}>
-          <div className="w-[360px] rounded-2xl bg-(--color-bg-card) p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-(--color-text-primary)">买入确认</h3>
-            <div className="mt-1 text-sm text-(--color-text-secondary)">{name} ({code})</div>
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-(--color-text-secondary)">实时价</label>
-                {buyModal.loadingPrice ? (
-                  <div className="mt-1 h-8 animate-pulse rounded-lg bg-(--color-bg-hover)" />
-                ) : (
-                  <input
-                    type="number"
-                    step={0.01}
-                    value={buyModal.price}
-                    onChange={(e) => setBuyModal({ ...buyModal, price: parseFloat(e.target.value) || 0 })}
-                    className="mt-1 w-full rounded-lg border border-(--color-border) px-3 py-1.5 text-sm outline-none focus:border-[#3B82F6]"
-                  />
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-medium text-(--color-text-secondary)">买入数量（股）</label>
-                <input
-                  type="number"
-                  min={1}
-                  step={100}
-                  value={buyModal.quantity}
-                  onChange={(e) => setBuyModal({ ...buyModal, quantity: parseInt(e.target.value) || 0 })}
-                  className="mt-1 w-full rounded-lg border border-(--color-border) px-3 py-1.5 text-sm outline-none focus:border-[#3B82F6]"
-                />
-              </div>
-              {!buyModal.loadingPrice && buyModal.price > 0 && (
-                <div className="rounded-lg bg-(--color-bg-raised) px-3 py-2 text-xs text-(--color-text-secondary)">
-                  预计成本：¥{(buyModal.price * buyModal.quantity).toFixed(2)}
-                </div>
-              )}
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setBuyModal(null)} className="rounded-lg border border-(--color-border) px-4 py-2 text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-bg-raised)">
-                取消
-              </button>
-              <button
-                onClick={confirmBuy}
-                disabled={!buyModal.price || buyModal.price <= 0 || buyModal.quantity <= 0 || buyModal.buying}
-                className="rounded-lg bg-[#3B82F6] px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {buyModal.buying ? "..." : "确认买入"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {buyModalOpen && (
+        <BuyModal
+          code={code}
+          name={name}
+          onConfirm={confirmBuy}
+          onClose={() => setBuyModalOpen(false)}
+        />
       )}
     </div>
   );

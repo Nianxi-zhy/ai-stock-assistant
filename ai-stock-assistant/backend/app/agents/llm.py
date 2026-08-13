@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import threading
+import time
 from typing import Optional
 
 from openai import OpenAI
@@ -11,6 +14,22 @@ from app.config import OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
 from app.db import insert_token_log
 from app.schemas.usage import TokenUsage
 from app.services.usage_service import build_token_usage
+
+logger = logging.getLogger(__name__)
+
+# 全局信号量：限制 LLM 实际并发请求数，避免多线程嵌套（候选股 × 4 Agent）触发 API 限流
+_LLM_SEMAPHORE = threading.Semaphore(4)
+
+# 全局 OpenAI client，复用 HTTP 连接池
+_client: OpenAI | None = None
+
+
+def _get_client() -> OpenAI:
+    """获取全局 OpenAI client（懒初始化）。"""
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL, timeout=60)
+    return _client
 
 
 def _extract_json(text: str) -> dict:
@@ -66,19 +85,31 @@ def call_llm(
 
     return_raw=True 时返回 (JSON, 用量, 原始文本)。
     """
-    client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL, timeout=60)
-    response = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    raw = response.choices[0].message.content or ""
-    parsed = _extract_json(raw)
-    usage = _extract_usage(response)
-    if return_raw:
-        return parsed, usage, raw
-    return parsed, usage
+    client = _get_client()
+    logger.info("LLM call start: model=%s", OPENAI_MODEL)
+    start = time.perf_counter()
+    try:
+        with _LLM_SEMAPHORE:
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        raw = response.choices[0].message.content or ""
+        parsed = _extract_json(raw)
+        usage = _extract_usage(response)
+        elapsed = time.perf_counter() - start
+        logger.info(
+            "LLM call done: model=%s, elapsed=%.2fs, prompt_tokens=%d, completion_tokens=%d",
+            OPENAI_MODEL, elapsed, usage.prompt_tokens, usage.completion_tokens,
+        )
+        if return_raw:
+            return parsed, usage, raw
+        return parsed, usage
+    except Exception:
+        logger.exception("LLM call failed: model=%s", OPENAI_MODEL)
+        raise

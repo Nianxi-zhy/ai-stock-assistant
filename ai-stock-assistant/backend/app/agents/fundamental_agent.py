@@ -1,8 +1,12 @@
 """FundamentalAgent - 基本面分析"""
 from __future__ import annotations
 
+import logging
+
 from app.agents.base import AgentResult
 from app.agents.llm import call_llm
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """你是一名A股基本面分析师。根据提供的基本面数据，判断该股票的基本面质量。
 
@@ -43,7 +47,8 @@ def run_fundamental_agent(code: str, name: str, fund_summary: str, fund_score: i
             details=str(data.get("details", "")),
             token_usage=usage,
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("Agent %s failed: %s", "FundamentalAgent", e)
         return AgentResult(
             agent_name="FundamentalAgent",
             stars=3, signal="一般",

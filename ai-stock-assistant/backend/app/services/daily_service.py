@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime
 from typing import List
 
@@ -20,6 +21,8 @@ from app.services.portfolio_service import (
 from app.services.recommend_service import build_recommendations
 from app.services.stock_service import get_kline
 from app.services.usage_service import build_token_usage
+
+logger = logging.getLogger(__name__)
 
 
 def run_daily_routine() -> DailyRoutineResponse:
@@ -97,7 +100,8 @@ def run_daily_routine() -> DailyRoutineResponse:
                     pnl_pct=pnl_pct_val,
                     suggested_sell_price=result.suggested_sell_price,
                 ))
-        except Exception:
+        except Exception as e:
+            logger.warning("持仓复盘失败: %s", e)
             continue
 
     # Step 2: Scan new candidates
@@ -110,7 +114,8 @@ def run_daily_routine() -> DailyRoutineResponse:
             total_token_usage["completion_tokens"] += report.usage_summary.completion_tokens
             total_token_usage["total_tokens"] += report.usage_summary.total_tokens
             total_token_usage["cost_rmb"] += report.usage_summary.cost_rmb
-    except Exception:
+    except Exception as e:
+        logger.warning("生成推荐报告失败: %s", e)
         new_candidates = 0
         new_recommendations = 0
 
@@ -134,7 +139,8 @@ def run_daily_routine() -> DailyRoutineResponse:
                      agent_json, tu.prompt_tokens, tu.completion_tokens, tu.total_tokens, tu.cost_rmb),
                 )
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.warning("持久化今日推荐失败: %s", e)
             pass
         finally:
             conn.close()
@@ -156,7 +162,8 @@ def run_daily_routine() -> DailyRoutineResponse:
                 }
                 for r in report.recommendations
             ]
-        except Exception:
+        except Exception as e:
+            logger.warning("构建推荐详情失败: %s", e)
             rec_details = []
 
     # Step 4: Send notification
@@ -169,7 +176,8 @@ def run_daily_routine() -> DailyRoutineResponse:
             total_cost=total_token_usage["cost_rmb"],
             recommendations=rec_details,
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("发送每日报告通知失败: %s", e)
         pass
 
     return DailyRoutineResponse(

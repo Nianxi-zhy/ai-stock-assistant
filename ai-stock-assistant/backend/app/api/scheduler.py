@@ -1,9 +1,14 @@
 """收盘自动回测调度与环境分层分析端点（阶段 4.3 / 4.5 / 5 校准）"""
+import asyncio
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.db import get_connection
 from app.services.scheduler_service import environment_analysis, run_daily_backtests
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["scheduler"])
 
@@ -17,22 +22,26 @@ class DailyRunRequest(BaseModel):
 @router.get("/backtest/environment-analysis")
 async def backtest_environment_analysis(days: int = 90):
     try:
-        return environment_analysis(days=days)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return await asyncio.to_thread(environment_analysis, days=days)
+    except Exception:
+        logger.exception("环境分层分析失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/scheduler/daily-run")
 async def daily_run(req: DailyRunRequest):
     try:
-        result = run_daily_backtests(limit=req.limit, days=req.days, strategy=req.strategy)
+        result = await asyncio.to_thread(
+            run_daily_backtests, limit=req.limit, days=req.days, strategy=req.strategy
+        )
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
         return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("每日回测调度失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.get("/calibration/status")
@@ -67,8 +76,9 @@ async def calibration_status():
                 for r in strat_rows
             ],
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("获取校准状态失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
 
 @router.post("/calibration/run-rules")
@@ -77,10 +87,11 @@ async def calibration_run_rules():
     try:
         from app.services.calibrate_service import apply_rule_params, calibrate_rule_weights
 
-        result = calibrate_rule_weights()
+        result = await asyncio.to_thread(calibrate_rule_weights)
         if "error" in result:
             return {"error": result["error"]}
-        n = apply_rule_params(result)
+        n = await asyncio.to_thread(apply_rule_params, result)
         return {**result, "applied": n}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("规则权重校准失败")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")

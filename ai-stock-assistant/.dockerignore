@@ -1,0 +1,22 @@
+# Documentation
+docs/
+*.md
+
+# Git
+.git/
+.gitignore
+
+# Python / Node artifacts
+__pycache__/
+*.py[cod]
+node_modules/
+.next/
+out/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

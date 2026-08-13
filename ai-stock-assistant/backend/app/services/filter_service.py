@@ -9,11 +9,8 @@ import requests
 
 import app.config  # noqa: F401
 import app.config as cfg
+from app.config import SINA_QUOTE_URL
 
-_SINA_URL = (
-    "https://vip.stock.finance.sina.com.cn/quotes_service/"
-    "api/json_v2.php/Market_Center.getHQNodeData"
-)
 _SINA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Referer": "https://finance.sina.com.cn/",
@@ -39,7 +36,7 @@ def _fetch_spot_from_sina() -> pd.DataFrame:
             "_s_r_a": "init",
         }
         try:
-            resp = requests.get(_SINA_URL, params=params, timeout=15, headers=_SINA_HEADERS)
+            resp = requests.get(SINA_QUOTE_URL, params=params, timeout=15, headers=_SINA_HEADERS)
             resp.raise_for_status()
             text = resp.text.strip()
             if not text or text == "null":

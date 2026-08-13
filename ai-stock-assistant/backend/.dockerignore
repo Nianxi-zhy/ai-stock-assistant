@@ -1,0 +1,31 @@
+# SQLite data is persisted via a runtime volume; never bake it into the image
+data/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.env
+.venv/
+venv/
+
+# Development / test / diagnostic scripts not needed in the production image
+scripts/
+tests/
+test_*.py
+run_backend.ps1
+run_daily.py
+pytest.ini
+requirements-dev.txt
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp

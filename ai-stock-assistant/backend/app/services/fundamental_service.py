@@ -1,10 +1,11 @@
-﻿"""基本面数据服务：PE、PB 等估值指标（使用腾讯接口）"""
+"""基本面数据服务：PE、PB 等估值指标（使用腾讯接口）"""
 from __future__ import annotations
 
 from typing import Optional
 
 import requests
 
+from app.config import TENCENT_QUOTE_URL
 from app.services.cache import TTLCache
 
 _fund_cache = TTLCache(default_ttl=86400)
@@ -54,7 +55,7 @@ def get_fundamental_snapshot(code: str, name: str) -> dict:
     symbol = _code_to_tencent_symbol(code)
     try:
         resp = requests.get(
-            f"https://web.sqt.gtimg.cn/q={symbol}",
+            f"{TENCENT_QUOTE_URL}{symbol}",
             timeout=10,
             headers=_HEADERS,
         )

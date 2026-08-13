@@ -5,9 +5,7 @@ from typing import Optional
 
 import requests
 
-from app.config import SERVER_CHAN_KEY
-
-_SERVER_CHAN_URL = "https://sctapi.ftqq.com"
+from app.config import SERVERCHAN_URL, SERVER_CHAN_KEY
 
 
 def send_server_chan(
@@ -25,7 +23,7 @@ def send_server_chan(
 
     try:
         resp = requests.post(
-            f"{_SERVER_CHAN_URL}/{send_key}.send",
+            f"{SERVERCHAN_URL}/{send_key}.send",
             data={"title": title, "desp": content},
             timeout=15,
         )

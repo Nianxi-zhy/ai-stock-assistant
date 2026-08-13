@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from datetime import date
 from typing import Any, Optional
 
@@ -13,6 +14,8 @@ from app.services.market_service import assess_market_environment
 from app.services.recommend_service import build_recommendations, persist_recommendation_report
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
+
+logger = logging.getLogger(__name__)
 
 
 def _loads(value: Optional[str], default: Any) -> Any:
@@ -158,8 +161,9 @@ async def refresh_today_recommendations(
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="recommendation run exceeded its time budget")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Failed to refresh today recommendations")
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试")
 
     report.env_status = env.get("status")
     report.env_score = env.get("score")

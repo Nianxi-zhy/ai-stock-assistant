@@ -1,4 +1,4 @@
-﻿const API_BASE = "http://localhost:8000/api/v1";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api/v1";
 
 // Simple client-side cache to avoid re-fetching on component remounts
 const __apiCache = new Map<string, { data: unknown; expires: number }>();
@@ -11,6 +11,15 @@ function __cached<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Pro
     __apiCache.set(key, { data, expires: Date.now() + ttlMs });
     return data;
   });
+}
+
+// Invalidate cached reads by exact key or key prefix (e.g. "rec:" clears all rec:* entries)
+export function invalidateApiCache(keyOrPrefix: string): void {
+  for (const key of __apiCache.keys()) {
+    if (key === keyOrPrefix || key.startsWith(keyOrPrefix)) {
+      __apiCache.delete(key);
+    }
+  }
 }
 
 
@@ -107,7 +116,11 @@ export interface FilterSettings {
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(600000) });
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+  const headers: HeadersInit = apiKey
+    ? { "X-API-Key": apiKey, ...(init?.headers ?? {}) }
+    : (init?.headers ?? {});
+  const res = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(600000) });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
@@ -133,7 +146,10 @@ export function refreshRecommendations(
   return fetchJson<RecommendationReport>(
     `${API_BASE}/recommendations/today?candidate_limit=${candidateLimit}&top_n=${topN}`,
     { method: "POST" }
-  );
+  ).then(data => {
+    invalidateApiCache("rec:");
+    return data;
+  });
 }
 
 export function fetchFilterSettings(): Promise<FilterSettings> {
@@ -148,6 +164,11 @@ export function updateFilterSettings(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  }).then(data => {
+    // Filter changes affect both the settings read and the recommendation report
+    invalidateApiCache("filter_settings");
+    invalidateApiCache("rec:");
+    return data;
   });
 }
 
@@ -398,8 +419,14 @@ export function fetchHoldings(status = "holding"): Promise<HoldingListResponse> 
   return fetchJson<HoldingListResponse>(`${API_BASE}/portfolio?status=${status}`);
 }
 
+// Invalidate read caches affected by portfolio mutations
+function __invalidateHoldings(): void {
+  invalidateApiCache("holdings_advice");
+}
+
 export function refreshHoldingsPrices(): Promise<{ status: string; updated: number }> {
-  return fetchJson<{ status: string; updated: number }>(`${API_BASE}/portfolio/refresh-prices`, { method: "POST" });
+  return fetchJson<{ status: string; updated: number }>(`${API_BASE}/portfolio/refresh-prices`, { method: "POST" })
+    .then(data => { __invalidateHoldings(); return data; });
 }
 
 export function createHolding(data: HoldingCreateRequest): Promise<HoldingItem> {
@@ -407,13 +434,13 @@ export function createHolding(data: HoldingCreateRequest): Promise<HoldingItem> 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function sellHolding(holdingId: number, sellPrice = 0, reason = ""): Promise<HoldingItem> {
   return fetchJson<HoldingItem>(`${API_BASE}/portfolio/${holdingId}/sell?sell_price=${sellPrice}&reason=${encodeURIComponent(reason)}`, {
     method: "POST",
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function updateHolding(holdingId: number, data: HoldingUpdateRequest): Promise<HoldingItem> {
@@ -421,7 +448,7 @@ export function updateHolding(holdingId: number, data: HoldingUpdateRequest): Pr
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function addPosition(holdingId: number, data: AddPositionRequest): Promise<HoldingItem> {
@@ -429,7 +456,7 @@ export function addPosition(holdingId: number, data: AddPositionRequest): Promis
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function createSellOrder(holdingId: number, sellPrice: number): Promise<HoldingItem> {
@@ -437,7 +464,7 @@ export function createSellOrder(holdingId: number, sellPrice: number): Promise<H
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sell_price: sellPrice }),
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function updateSellOrderPrice(holdingId: number, sellPrice: number): Promise<HoldingItem> {
@@ -445,23 +472,24 @@ export function updateSellOrderPrice(holdingId: number, sellPrice: number): Prom
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sell_price: sellPrice }),
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function confirmSell(holdingId: number, reason = "挂单成交"): Promise<HoldingItem> {
   return fetchJson<HoldingItem>(`${API_BASE}/portfolio/${holdingId}/confirm-sell?reason=${encodeURIComponent(reason)}`, {
     method: "POST",
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function cancelSellOrder(holdingId: number): Promise<HoldingItem> {
   return fetchJson<HoldingItem>(`${API_BASE}/portfolio/${holdingId}/cancel-sell`, {
     method: "POST",
-  });
+  }).then(res => { __invalidateHoldings(); return res; });
 }
 
 export function deleteHolding(holdingId: number): Promise<void> {
-  return fetchJson<void>(`${API_BASE}/portfolio/${holdingId}`, { method: "DELETE" });
+  return fetchJson<void>(`${API_BASE}/portfolio/${holdingId}`, { method: "DELETE" })
+    .then(res => { __invalidateHoldings(); return res; });
 }
 
 export function fetchTrades(
@@ -548,12 +576,18 @@ export function fetchIndicatorsHistory(code: string, days = 120): Promise<Indica
   return fetchJson<IndicatorsHistoryResponse>(`${API_BASE}/stocks/${code}/indicators-history?days=${days}`);
 }
 
-export function fetchIndicators(code: string, days = 60, name = ""): Promise<any> {
-  return fetchJson<any>(`${API_BASE}/stocks/${code}/indicators?days=${days}&name=${encodeURIComponent(name)}`);
+export function fetchIndicators(code: string, days = 60, name = ""): Promise<unknown> {
+  return fetchJson<unknown>(`${API_BASE}/stocks/${code}/indicators?days=${days}&name=${encodeURIComponent(name)}`);
 }
 
 export function runDailyRoutine(): Promise<DailyRoutineResponse> {
-  return fetchJson<DailyRoutineResponse>(`${API_BASE}/daily-routine`, { method: "POST" });
+  return fetchJson<DailyRoutineResponse>(`${API_BASE}/daily-routine`, { method: "POST" })
+    .then(data => {
+      invalidateApiCache("rec:");
+      invalidateApiCache("holdings_advice");
+      invalidateApiCache("token_total");
+      return data;
+    });
 }
 
 export interface DailyUsage {

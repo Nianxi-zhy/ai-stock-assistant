@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError, as_completed
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -29,6 +30,8 @@ from app.services.indicator_service import build_indicator_explanation
 from app.services.news_service import build_news_summary, clear_news_cache, get_stock_news_bundle
 from app.services.rule_engine import screen_candidates
 from app.services.usage_service import build_token_usage, format_usage_report
+
+logger = logging.getLogger(__name__)
 
 
 def _empty_usage() -> TokenUsage:
@@ -203,11 +206,13 @@ def _log_candidate_rows(
                      env_status, env_score),
                 )
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.warning("写入候选日志失败: %s", e)
             conn.rollback()
         finally:
             conn.close()
-    except Exception:
+    except Exception as e:
+        logger.warning("候选日志记录异常: %s", e)
         pass
 
 
@@ -230,11 +235,13 @@ def _update_analyzed_candidate_rows(
                     (result.score * 10, action, result.reason, status, run_id, result.candidate.code),
                 )
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.warning("回填候选分析结果失败: %s", e)
             conn.rollback()
         finally:
             conn.close()
-    except Exception:
+    except Exception as e:
+        logger.warning("回填候选分析结果异常: %s", e)
         pass
 
 
@@ -303,7 +310,8 @@ def build_recommendations(
     analyzed: list[CandidateProcessResult] = []
     failed_candidates: list[CandidateFailure] = []
     usage_summary = _empty_usage()
-    pool_size = min(len(candidates), cfg.RECOMMENDATION_MAX_WORKERS)
+    # 所有 agent 共享一个 4 线程的池，避免 3×4=12 线程嵌套导致 LLM 限流
+    pool_size = min(len(candidates), 4)
 
     pool = ThreadPoolExecutor(max_workers=pool_size)
     futures = {pool.submit(_process_candidate, candidate, deadline): candidate for candidate in candidates}
@@ -425,11 +433,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("Day 2/3: 预筛选 + 新闻 + AI 推荐")
-    print("=" * 60)
-    print(get_price_mode_label())
-    print(
+    logger.info("=" * 60)
+    logger.info("Day 2/3: 预筛选 + 新闻 + AI 推荐")
+    logger.info("=" * 60)
+    logger.info(get_price_mode_label())
+    logger.info(
         f"参数: candidate_limit={args.candidate_limit}, "
         f"top_n={args.top_n}, min_rule_score={args.min_rule_score}"
     )
@@ -442,31 +450,31 @@ def main() -> None:
 
     output_path = save_report(report, Path(args.output_dir))
 
-    print("\n" + "=" * 60)
-    print("筛选与统计")
-    print("=" * 60)
-    print(f"规则候选: {report.candidate_count} 只")
-    print(f"AI 已分析: {report.analyzed_count} 只")
-    print(f"最终推荐: {report.count} 只")
-    print(format_usage_report(report.usage_summary))
+    logger.info("\n" + "=" * 60)
+    logger.info("筛选与统计")
+    logger.info("=" * 60)
+    logger.info(f"规则候选: {report.candidate_count} 只")
+    logger.info(f"AI 已分析: {report.analyzed_count} 只")
+    logger.info(f"最终推荐: {report.count} 只")
+    logger.info(format_usage_report(report.usage_summary))
 
-    print("\n" + "=" * 60)
-    print("Top 推荐")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("Top 推荐")
+    logger.info("=" * 60)
     if not report.recommendations:
-        print("暂无符合条件的推荐，可尝试降低 --min-rule-score 或扩大 --candidate-limit")
+        logger.info("暂无符合条件的推荐，可尝试降低 --min-rule-score 或扩大 --candidate-limit")
     for item in report.recommendations:
-        print(
+        logger.info(
             f"#{item.rank} {item.name}({item.code}) "
             f"价={item.close_price:.2f} 规则={item.rule_score} AI={item.score} "
             f"新闻={item.news_count}条 星级={item.stars}/5 建议={item.action}"
         )
-        print(f"   理由: {item.reason}")
+        logger.info(f"   理由: {item.reason}")
 
-    print("\n" + "=" * 60)
-    print("JSON 报告")
-    print("=" * 60)
-    print(output_path.resolve())
+    logger.info("\n" + "=" * 60)
+    logger.info("JSON 报告")
+    logger.info("=" * 60)
+    logger.info(output_path.resolve())
 
 
 if __name__ == "__main__":

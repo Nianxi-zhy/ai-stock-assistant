@@ -1,8 +1,12 @@
 """RiskAgent — 风险评估"""
 from __future__ import annotations
 
+import logging
+
 from app.agents.base import AgentResult
 from app.agents.llm import call_llm
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """你是一名 A 股风控分析师。根据以下信息评估该股票的交易风险。
 风险维度包括：波动风险、流动性风险、追高风险、财报雷区。
@@ -38,7 +42,8 @@ def run_risk_agent(
             details=str(data.get("details", "")),
             token_usage=usage,
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("Agent %s failed: %s", "RiskAgent", e)
         return AgentResult(
             agent_name="RiskAgent",
             stars=3,

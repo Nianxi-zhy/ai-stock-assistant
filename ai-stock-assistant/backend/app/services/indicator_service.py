@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import pandas as pd
@@ -10,6 +11,8 @@ from ta.volatility import BollingerBands
 from app.schemas.stock import IndicatorSnapshot
 from app.services.stock_service import get_kline
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def _signal_macd(dif: float, dea: float, hist: float) -> str:
@@ -172,17 +175,17 @@ def get_indicator_snapshot(code: str, days: int = 60, name: Optional[str] = None
 
 if __name__ == "__main__":
     snapshot = get_indicator_snapshot("600519", days=60, name="贵州茅台")
-    print(f"{snapshot.name}({snapshot.code}) 指标快照 @ {snapshot.trade_date}")
-    print(f"收盘: {snapshot.close:.2f}")
-    print(
+    logger.info(f"{snapshot.name}({snapshot.code}) 指标快照 @ {snapshot.trade_date}")
+    logger.info(f"收盘: {snapshot.close:.2f}")
+    logger.info(
         f"MACD: DIF={snapshot.macd_dif:.4f}, DEA={snapshot.macd_dea:.4f}, "
         f"HIST={snapshot.macd_hist:.4f} ({snapshot.macd_signal})"
     )
-    print(f"RSI: {snapshot.rsi:.2f} ({snapshot.rsi_signal})")
-    print(
+    logger.info(f"RSI: {snapshot.rsi:.2f} ({snapshot.rsi_signal})")
+    logger.info(
         f"MA: MA5={snapshot.ma5:.2f}, MA20={snapshot.ma20:.2f}, MA60={snapshot.ma60:.2f}"
     )
-    print(
+    logger.info(
         f"BOLL: 上={snapshot.boll_upper:.2f}, 中={snapshot.boll_mid:.2f}, "
         f"下={snapshot.boll_lower:.2f}"
     )

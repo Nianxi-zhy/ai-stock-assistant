@@ -1,41 +1,78 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Sparkles } from "lucide-react";
+
+type ThemeMode = "light" | "dark" | "cute";
+
+const THEME_CYCLE: ThemeMode[] = ["light", "dark", "cute"];
+
+const THEME_META: Record<
+  ThemeMode,
+  { icon: React.ReactNode; label: string; next: ThemeMode }
+> = {
+  light: {
+    icon: <Sun size={16} className="text-[#F59E0B]" />,
+    label: "亮色",
+    next: "dark",
+  },
+  dark: {
+    icon: <Moon size={16} className="text-[#A5B4FC]" />,
+    label: "暗色",
+    next: "cute",
+  },
+  cute: {
+    icon: <Sparkles size={16} className="text-[#FF6B8A]" />,
+    label: "可爱",
+    next: "light",
+  },
+};
+
+function applyTheme(mode: ThemeMode) {
+  const root = document.documentElement;
+  if (mode === "dark") {
+    root.classList.add("dark");
+    root.classList.remove("theme-cute");
+  } else if (mode === "cute") {
+    root.classList.remove("dark");
+    root.classList.add("theme-cute");
+  } else {
+    root.classList.remove("dark", "theme-cute");
+  }
+  localStorage.setItem("theme", mode);
+}
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false);
+  const [mode, setMode] = useState<ThemeMode>("light");
 
   useEffect(() => {
-    // 检查系统偏好
-    if (typeof window !== "undefined" && window.matchMedia) {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const savedTheme = localStorage.getItem("theme");
-      setIsDark(savedTheme === "dark" || (!savedTheme && prefersDark));
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("theme") as ThemeMode | null;
+    if (saved && THEME_CYCLE.includes(saved)) {
+      setMode(saved);
+      applyTheme(saved);
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      setMode("dark");
+      applyTheme("dark");
     }
   }, []);
 
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    }
-  }, [isDark]);
-
   const toggleTheme = () => {
-    setIsDark(!isDark);
+    const next = THEME_META[mode].next;
+    setMode(next);
+    applyTheme(next);
   };
+
+  const meta = THEME_META[mode];
 
   return (
     <button
       onClick={toggleTheme}
-      className="flex items-center gap-2 rounded-lg border border-(--color-border) px-3 py-2 text-sm font-medium transition-colors hover:bg-(--color-bg-hover)"
+      title={`当前：${meta.label}，点击切换`}
+      className="flex items-center gap-2 rounded-lg border border-(--color-border) bg-(--color-bg-card) px-3 py-2 text-sm font-medium transition-all hover:bg-(--color-bg-hover) active:scale-95"
     >
-      {isDark ? <Sun size={16} className="text-[#F59E0B]" /> : <Moon size={16} className="text-[#3B82F6]" />}
-      <span>{isDark ? "亮色" : "暗色"}</span>
+      {meta.icon}
+      <span>{meta.label}</span>
     </button>
   );
 }

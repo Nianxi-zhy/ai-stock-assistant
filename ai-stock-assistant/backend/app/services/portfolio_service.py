@@ -5,7 +5,7 @@ import json
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 
-from app.db import get_connection, init_db
+from app.db import get_connection, get_db, init_db
 from app.schemas.portfolio import (
     AddPositionRequest,
     DailyReviewResult,
@@ -30,8 +30,7 @@ def ensure_tables():
 def create_holding(data: HoldingCreate) -> HoldingItem:
     ensure_tables()
     buy_date = data.buy_date or date.today().isoformat()
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         cursor = conn.execute(
             """INSERT INTO holdings (code, name, buy_date, buy_price, quantity,
                stop_loss, take_profit, ai_score_at_buy, buy_reason, current_price)
@@ -49,8 +48,6 @@ def create_holding(data: HoldingCreate) -> HoldingItem:
         )
         conn.commit()
         return get_holding_by_id(cursor.lastrowid)
-    finally:
-        conn.close()
 
 
 def add_position(holding_id: int, data: AddPositionRequest) -> HoldingItem:
@@ -98,8 +95,7 @@ def get_holding_by_id(holding_id: int) -> HoldingItem:
 
 def list_holdings(status: str = "holding") -> HoldingListResponse:
     ensure_tables()
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         if status == "holding":
             rows = conn.execute(
                 "SELECT * FROM holdings WHERE status IN ('holding', 'pending') ORDER BY created_at DESC",
@@ -121,8 +117,6 @@ def list_holdings(status: str = "holding") -> HoldingListResponse:
             total_pnl_pct=round((total_pnl / total_cost * 100) if total_cost else 0, 2),
             items=items,
         )
-    finally:
-        conn.close()
 
 
 def update_holding(holding_id: int, data: HoldingUpdate) -> HoldingItem:

@@ -9,6 +9,7 @@ import json
 import os
 from datetime import date, datetime, timedelta
 
+from app.config import TENCENT_QUOTE_URL
 from app.db import get_connection
 
 # 观察期（交易日数），可在 .env 中覆盖
@@ -39,7 +40,7 @@ def _latest_known_price(code: str) -> tuple[float, str]:
     try:
         import requests
         resp = requests.get(
-            f"https://web.sqt.gtimg.cn/q={_stock_market_prefix(code)}{code}",
+            f"{TENCENT_QUOTE_URL}{_stock_market_prefix(code)}{code}",
             timeout=10,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
         )

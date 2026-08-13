@@ -1,6 +1,8 @@
 """Agent 编排 — 统一的多 Agent 分析管线"""
 from __future__ import annotations
 
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
 from app.agents.base import AgentResult
@@ -13,6 +15,8 @@ from app.schemas.stock import IndicatorSnapshot
 from app.schemas.usage import TokenUsage
 from app.services.indicator_service import build_indicator_explanation
 from app.services.usage_service import build_token_usage
+
+logger = logging.getLogger(__name__)
 
 
 def _empty_usage() -> TokenUsage:
@@ -68,15 +72,38 @@ def run_agent_pipeline(
     name: str,
     indicators: IndicatorSnapshot,
     news_summary: str = "",
+    executor: ThreadPoolExecutor | None = None,
 ) -> AgentPipelineResult:
     """对一只股票运行完整的多 Agent 管线。"""
     indicator_text = build_indicator_text(indicators)
     kline_summary = indicators.kline_summary
 
-    news_result = run_news_agent(code, name, news_summary)
-    technical_result = run_technical_agent(code, name, kline_summary, indicator_text)
-    risk_result = run_risk_agent(code, name, kline_summary, indicator_text, indicators.close)
-    fundamental_result = run_fundamental_agent(code, name, indicators.fundamental_summary, indicators.fundamental_score)
+    # 并行执行 4 个 Agent（它们之间无数据依赖）
+    logger.info("Agent pipeline start: stock=%s", code)
+    # 如果外层传入 executor，复用之；否则自建（单股调用场景）
+    if executor is not None:
+        news_future = executor.submit(run_news_agent, code, name, news_summary)
+        technical_future = executor.submit(run_technical_agent, code, name, kline_summary, indicator_text)
+        risk_future = executor.submit(run_risk_agent, code, name, kline_summary, indicator_text, indicators.close)
+        fundamental_future = executor.submit(
+            run_fundamental_agent, code, name, indicators.fundamental_summary, indicators.fundamental_score
+        )
+        news_result = news_future.result()
+        technical_result = technical_future.result()
+        risk_result = risk_future.result()
+        fundamental_result = fundamental_future.result()
+    else:
+        with ThreadPoolExecutor(max_workers=4) as inner_executor:
+            news_future = inner_executor.submit(run_news_agent, code, name, news_summary)
+            technical_future = inner_executor.submit(run_technical_agent, code, name, kline_summary, indicator_text)
+            risk_future = inner_executor.submit(run_risk_agent, code, name, kline_summary, indicator_text, indicators.close)
+            fundamental_future = inner_executor.submit(
+                run_fundamental_agent, code, name, indicators.fundamental_summary, indicators.fundamental_score
+            )
+            news_result = news_future.result()
+            technical_result = technical_future.result()
+            risk_result = risk_future.result()
+            fundamental_result = fundamental_future.result()
 
     score, action, reason, weights = run_decision_agent(
         code, name, news_result, technical_result, risk_result, fundamental_result,
@@ -93,6 +120,7 @@ def run_agent_pipeline(
         if result.status != "ok"
     ]
 
+    logger.info("Agent pipeline done: stock=%s", code)
     return AgentPipelineResult(
         news_result=news_result,
         technical_result=technical_result,

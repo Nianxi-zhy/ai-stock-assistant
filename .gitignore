@@ -24,4 +24,6 @@ node_modules/
 
 # Runtime data (SQLite 数据库与本地缓存)
 ai-stock-assistant/backend/data/*.db
+ai-stock-assistant/backend/data/*.db-shm
+ai-stock-assistant/backend/data/*.db-wal
 ai-stock-assistant/backend/data/*.json

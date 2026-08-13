@@ -1,8 +1,12 @@
 """NewsAgent — 分析个股新闻舆情"""
 from __future__ import annotations
 
+import logging
+
 from app.agents.base import AgentResult
 from app.agents.llm import call_llm
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """你是一名 A 股新闻分析师。根据提供的新闻摘要，判断该股票的舆情倾向。
 只返回 JSON：
@@ -38,7 +42,8 @@ def run_news_agent(code: str, name: str, news_summary: str) -> AgentResult:
             details=str(data.get("details", "")),
             token_usage=usage,
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("Agent %s failed: %s", "NewsAgent", e)
         return AgentResult(
             agent_name="NewsAgent",
             stars=3,

@@ -1,4 +1,7 @@
-"""测试 Server酱 通知"""
+"""测试 Server酱 通知
+
+手动诊断脚本，非自动化测试（会发送真实网络请求，勿纳入 pytest）。
+"""
 import os
 from pathlib import Path
 

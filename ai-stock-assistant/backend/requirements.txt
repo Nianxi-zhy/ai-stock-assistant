@@ -1,8 +1,9 @@
-fastapi
-uvicorn
-akshare
-pandas
-openai
-ta
-python-dotenv
-pydantic
+fastapi==0.141.1
+uvicorn==0.52.1
+akshare==1.18.84
+pandas==3.0.5
+openai==3.0.0
+ta==0.11.0
+python-dotenv==1.2.2
+pydantic==2.13.4
+pydantic-settings==2.15.0

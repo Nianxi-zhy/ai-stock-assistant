@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timedelta
 from typing import Optional
@@ -8,6 +9,7 @@ import pandas as pd
 import requests
 
 import app.config  # noqa: F401
+from app.config import TENCENT_KLINE_URL, TENCENT_QUOTE_URL
 from app.schemas.stock import KlineBar, StockSnapshot
 from app.services.cache import TTLCache
 
@@ -16,6 +18,8 @@ try:
 except ImportError:
     ak = None
 
+logger = logging.getLogger(__name__)
+
 STOCK_NAMES = {
     "600519": "贵州茅台",
 }
@@ -23,8 +27,6 @@ STOCK_NAMES = {
 _kline_cache = TTLCache(default_ttl=300)
 _realtime_cache = TTLCache(default_ttl=10)
 
-_TENCENT_KLINE_URL = "https://ifzq.gtimg.cn/appstock/app/fqkline/get"
-_TENCENT_QT_URL = "https://web.sqt.gtimg.cn/q="
 _TENCENT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 }
@@ -55,7 +57,7 @@ def _fetch_kline_from_tencent(code: str, days: int, as_index: bool = False) -> O
     market = _tencent_market(code, as_index)
     params = {"param": f"{market}{code},day,,,{days},qfq"}
     try:
-        resp = requests.get(_TENCENT_KLINE_URL, params=params, timeout=10, headers=_TENCENT_HEADERS)
+        resp = requests.get(TENCENT_KLINE_URL, params=params, timeout=10, headers=_TENCENT_HEADERS)
         if resp.status_code != 200:
             return None
         payload = resp.json()
@@ -147,7 +149,7 @@ def get_realtime_price(code: str, as_index: bool = False) -> float:
     if cached is not None:
         return cached
     market = _tencent_market(code, as_index)
-    url = f"{_TENCENT_QT_URL}{market}{code}"
+    url = f"{TENCENT_QUOTE_URL}{market}{code}"
     try:
         resp = requests.get(url, timeout=10, headers=_TENCENT_HEADERS)
         resp.raise_for_status()
@@ -174,7 +176,7 @@ def get_stock_name(code: str) -> str:
     if cached is not None:
         return cached
     market = _tencent_market(code, as_index=False)
-    url = f"{_TENCENT_QT_URL}{market}{code}"
+    url = f"{TENCENT_QUOTE_URL}{market}{code}"
     try:
         resp = requests.get(url, timeout=10, headers=_TENCENT_HEADERS)
         resp.raise_for_status()
@@ -204,10 +206,10 @@ def get_stock_snapshot(code: str, days: int = 60) -> StockSnapshot:
 
 if __name__ == "__main__":
     snapshot = get_stock_snapshot("600519", days=60)
-    print(f"{snapshot.name}({snapshot.code}) 最近 {snapshot.days} 个交易日 K 线")
-    print("最新 5 条:")
+    logger.info(f"{snapshot.name}({snapshot.code}) 最近 {snapshot.days} 个交易日 K 线")
+    logger.info("最新 5 条:")
     for bar in snapshot.klines[-5:]:
-        print(
+        logger.info(
             f"{bar.date} 开={bar.open:.2f} 高={bar.high:.2f} "
             f"低={bar.low:.2f} 收={bar.close:.2f} 量={bar.volume:.0f}"
         )
