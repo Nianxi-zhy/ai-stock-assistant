@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-bg-main: #F8FAFC;
+  --color-bg-card: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-accent: #3B82F6;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+}
+
+:root {
+  --color-bg-raised: #F9FAFB;
+  --color-bg-hover: #F3F4F6;
+  --color-border-light: #F3F4F6;
+  --color-text-tertiary: #9CA3AF;
+  --color-accent-hover: #2563EB;
+  --color-accent-light: #EEF2FF;
+}
+
+.dark {
+  --color-bg-main: #111827;
+  --color-bg-card: #1F2937;
+  --color-bg-raised: #1F2937;
+  --color-bg-hover: #374151;
+  --color-border: #374151;
+  --color-border-light: #374151;
+  --color-text-primary: #F9FAFB;
+  --color-text-secondary: #9CA3AF;
+  --color-text-tertiary: #6B7280;
+  --color-accent-hover: #60A5FA;
+  --color-accent-light: rgba(59, 130, 246, 0.1);
+}
+
+body {
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background-color: var(--color-bg-main);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Clean scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}

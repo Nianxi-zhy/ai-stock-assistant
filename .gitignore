@@ -1,0 +1,27 @@
+# IDE / Tools
+.idea/
+.vscode/
+.vs/
+.claude/
+.codegraph/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+.next/
+
+# Runtime data (SQLite 数据库与本地缓存)
+ai-stock-assistant/backend/data/*.db
+ai-stock-assistant/backend/data/*.json

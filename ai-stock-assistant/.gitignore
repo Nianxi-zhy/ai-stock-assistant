@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+
+# Node
+node_modules/
+.next/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Day 2 output
+backend/output/
+
+# Internal development guide (not for GitHub)
+PROJECT_GUIDE.md
+
+# Local database (contains personal analysis data)
+backend/data/ai_stock.db
